@@ -1,0 +1,250 @@
+﻿@* Potřebné namespace *@
+@namespace Taskly.Components.Layout
+@using Microsoft.Maui.Devices
+@using Taskly.Services.Auth
+@using Taskly.Components.Core
+@using Taskly.Services.UI
+
+@* Dědičnost a implementace *@
+@inherits LayoutComponentBase
+@implements IDisposable
+
+@* Služby pro DI *@
+@inject ILogger<AndroidMainLayout> Logger
+@inject ConnectivityService ConnectivityService
+@inject NavigationManager NavigationManager
+@inject IThemeService ThemeService
+
+<div>
+    @* SYSTÉMOVÉ KOMPONENTY - inicializační a monitorovací komponenty bez UI *@
+    <AuthInitializer />
+    <MultiDeviceGuard />
+    <NotificationRouter />
+    <ConnectivityMonitor />
+    <TaskInitializer />
+    <DashboardInitializer />
+
+    @* MUDBLAZOR PROVIDERY - potřebné pro fungování UI knihovny *@
+    <MudThemeProvider Theme="ThemeService.CurrentTheme" IsDarkMode="isDarkMode" />
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+
+    <MudLayout>
+        @* HORNÍ APLIKAČNÍ LIŠTA *@
+        <MudAppBar Elevation="1" Class="pa-0 px-2" Color="Color.Primary">
+
+            <MudLink Href="/" Underline="Underline.None" Color="Color.Inherit">
+                <MudText Typo="Typo.h5" Style="font-weight: bold;">Taskly</MudText>
+            </MudLink>
+
+            <MudSpacer />
+
+            @* Offline indikátor *@
+            @if (IsOffline)
+            {
+                <MudBadge Icon="@Icons.Material.Filled.CloudOff" Color="Color.Error" Overlap="true" Class="mr-2">
+                    <MudText Color="Color.Error" Class="font-weight-bold">Offline</MudText>
+                </MudBadge>
+            }
+
+            <span class="mr-2">
+                <NotificationCenter />
+            </span>
+            <ProfileButton />
+        </MudAppBar>
+
+        @* Hlavní obsah *@
+        <MudMainContent Class=" pb-16">
+            <MudContainer MaxWidth="MaxWidth.False" Class="pa-2">
+                @Body       @* (sem se renderují stránky jako Nastavení, Statistiky, atd.) *@
+            </MudContainer>
+        </MudMainContent>
+
+        @* Spodní navigace *@
+        <MudPaper Square="true" Elevation="2" Class="fixed-bottom pa-0 width-full">
+            <MudGrid Justify="Justify.SpaceBetween" Spacing="0">
+                <MudItem xs="2" Class="d-flex flex-column justify-center align-center py-1">
+                    <MudIconButton Icon="@Icons.Material.Filled.Home"
+                                   Class="@($"mud-icon-button-size-large pa-1 {(CurrentPath == "/" ? "mud-primary-text" : "")}")"
+                                   OnClick="@(() => NavigateTo("/"))" />
+                    <MudText Typo="Typo.caption">Domů</MudText>
+                </MudItem>
+
+                <MudItem xs="2" Class="d-flex flex-column justify-center align-center py-1">
+                    <MudIconButton Icon="@Icons.Material.Filled.TaskAlt"
+                                   Class="@($"mud-icon-button-size-large pa-1 {(CurrentPath.StartsWith("/tasks") ? "mud-primary-text" : "")}")"
+                                   OnClick="@(() => NavigateTo("/tasks"))" />
+                    <MudText Typo="Typo.caption">Úkoly</MudText>
+                </MudItem>
+                <MudItem xs="2" Class="d-flex flex-column justify-center align-center py-1">
+                    <MudIconButton Icon="@Icons.Material.Filled.WorkOutline"
+                                   Class="@($"mud-icon-button-size-large pa-1 {(CurrentPath.StartsWith("/projects") ? "mud-primary-text" : "")}")"
+                                   OnClick="@(() => NavigateTo("/projects"))" />
+                    <MudText Typo="Typo.caption">Projekty</MudText>
+                </MudItem>
+
+                <MudItem xs="2" Class="d-flex flex-column justify-center align-center py-1">
+                    <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                                   Class="@($"mud-icon-button-size-large pa-1 {(CurrentPath == "/settings" ? "mud-primary-text" : "")}")"
+                                   OnClick="@(() => NavigateTo("/settings"))" />
+                    <MudText Typo="Typo.caption">Nastavení</MudText>
+                </MudItem>
+
+
+                <MudItem xs="2" Class="d-flex flex-column justify-center align-center py-1">
+                    <MudIconButton Icon="@Icons.Material.Filled.Menu"
+                                   Class="mud-icon-button-size-large pa-1"
+                                   OnClick="@(() => ToggleMenu())" />
+                    <MudText Typo="Typo.caption">Menu</MudText>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        @* Mobilní menu *@
+        <MudDrawer @bind-Open="@_mobileMenuOpen" Anchor="Anchor.Left"
+                   Elevation="4" Variant="@DrawerVariant.Temporary"
+                   Class="pa-0" Style="max-height: 80vh;">
+            <MudItem Class="pa-3">
+                <MudText Typo="Typo.h6" Class="mb-2">Menu</MudText>
+                <AndroidNavMenu CurrentPath="@CurrentPath" OnMenuClose="(state) => _mobileMenuOpen = state" />
+            </MudItem>
+        </MudDrawer>
+    </MudLayout>
+</div>
+
+@code {
+    // PROMĚNNÉ A VLASTNOSTI
+    // Proměnné pro správu stavu UI
+    private bool _mobileMenuOpen = false;
+    private bool IsOffline;
+    private System.Threading.Timer? _statusTimer;
+    private bool isDarkMode;
+
+    // Pomocná vlastnost pro získání aktuální cesty - používáme pro zvýraznění aktivní položky v menu
+    private string CurrentPath => new Uri(NavigationManager.Uri).AbsolutePath;
+
+    // UI AKCE
+    // Přepínání mobilního menu
+    private void ToggleMenu()
+    {
+        _mobileMenuOpen = !_mobileMenuOpen;
+    }
+
+    // Navigace na jinou stránku - zavře menu po přechodu
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+        _mobileMenuOpen = false;
+    }
+
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    // Inicializace layoutu - nastavení témat, připojení a timerů
+    protected override async Task OnInitializedAsync()
+    {
+        // Inicializace tématu aplikace
+        await ThemeService.InitializeAsync();
+        isDarkMode = ThemeService.IsDarkMode;
+
+        // Přihlásíme se k událostem změny tématu
+        ThemeService.DarkModeChanged += OnDarkModeChanged;
+        ThemeService.PrimaryColorChanged += OnThemePropertyChanged;
+        ThemeService.DensityChanged += OnThemePropertyChanged;
+
+        // Nastavíme počáteční stav připojení podle aktuálního stavu
+        IsOffline = !ConnectivityService.IsConnected;
+
+        // Přihlásíme se k odběru změn připojení
+        ConnectivityService.ConnectivityChanged += OnConnectivityChanged;
+
+        // Spustíme timer pro pravidelnou kontrolu offline stavu
+        // Kontrolujeme každé 2 sekundy, jestli se nezměnil stav připojení
+        _statusTimer = new System.Threading.Timer(_ =>
+        {
+            CheckOfflineStatus();
+        }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+
+        // Přihlásíme se k události změny URL - pro aktualizaci UI při navigaci
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    // EVENT HANDLERY
+    // Zpracování změny barvy nebo hustoty tématu
+    private void OnThemePropertyChanged(string _)
+    {
+        // Vynutíme překreslení komponenty při změně tématu
+        StateHasChanged();
+    }
+
+    // Zpracování změny světlého/tmavého režimu
+    private void OnDarkModeChanged(bool newValue)
+    {
+        isDarkMode = newValue;
+        StateHasChanged();
+    }
+
+    // Zpracování změny URL - zavření mobilního menu při navigaci
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _mobileMenuOpen = false;
+        StateHasChanged();
+    }
+
+    // Zpracování změny stavu připojení
+    private void OnConnectivityChanged(bool isConnected)
+    {
+        InvokeAsync(() =>
+        {
+            IsOffline = !isConnected;
+            StateHasChanged();
+        });
+    }
+
+    // KONTROLA STAVU PŘIPOJENÍ
+    // Pravidelná kontrola offline stavu - synchronizace mezi SecureStorage a aktuálním stavem
+    private async void CheckOfflineStatus()
+    {
+        try
+        {
+            // Získáme stav z úložiště - to je perzistentní mezi restarty aplikace
+            var offlineStateFromStorage = await SecureStorage.GetAsync("is_offline_mode") == "true";
+
+            // Získáme aktuální stav připojení - to je aktuální stav zařízení
+            var currentOfflineState = !ConnectivityService.IsConnected;
+
+            // Kombinujeme obě hodnoty - jsme offline, pokud to říká úložiště NEBO aktuální stav
+            var newOfflineState = offlineStateFromStorage || currentOfflineState;
+
+            // Aktualizujeme stav jen když došlo ke změně - šetříme výkon
+            if (IsOffline != newOfflineState)
+            {
+                IsOffline = newOfflineState;
+                await InvokeAsync(StateHasChanged);
+
+                // Pokud se stavy liší, aktualizujeme úložiště
+                if (offlineStateFromStorage != currentOfflineState)
+                {
+                    await SecureStorage.SetAsync("is_offline_mode", currentOfflineState.ToString().ToLower());
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Chyba při kontrole offline stavu");
+        }
+    }
+
+    // UVOLNĚNÍ ZDROJŮ
+    // Uvolní zdroje komponenty - odregistruje event handlery pro předejití memory leaků
+    public void Dispose()
+    {
+        ThemeService.DarkModeChanged -= OnDarkModeChanged;
+        ThemeService.PrimaryColorChanged -= OnThemePropertyChanged;
+        ThemeService.DensityChanged -= OnThemePropertyChanged;
+        ConnectivityService.ConnectivityChanged -= OnConnectivityChanged;
+        NavigationManager.LocationChanged -= OnLocationChanged;
+
+        // Uvolníme timer pro kontrolu stavu
+        _statusTimer?.Dispose();
+    }
+}

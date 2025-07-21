@@ -1,0 +1,364 @@
+﻿/*DETAIL PROJEKTU STRÁNKA SE STYLY */
+
+/*Hlavní kontejner stránky s detailem projektu */
+::deep .project-detail-page-container {
+	border-radius: 8px !important;
+	background: var(--mud-palette-surface);
+	border: 1px solid var(--mud-palette-lines-default);
+}
+
+/*HLAVIČKA STRÁNKY */
+/*Stylování hlavičky s informacemi o projektu */
+.project-detail-header-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* Akční tlačítka v hlavičce */
+.project-detail-header-actions {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	justify-content: flex-end;
+}
+
+/* Indikátor stavu připojení */
+.project-detail-connection-status {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 4px;
+}
+
+/* Avatar uživatele */
+::deep .project-detail-user-avatar {
+	border: 2px solid var(--mud-palette-primary);
+}
+
+/*INFORMACE O PROJEKTU */
+/*Sekce s detailními informacemi o projektu */
+::deep .project-detail-info-section {
+	margin-bottom: 12px;
+	max-width: 100%;
+}
+
+/* Popisky pro informace o projektu */
+::deep .project-detail-label {
+	font-weight: 600 !important;
+	margin-bottom: 4px !important;
+	display: flex;
+	align-items: center;
+}
+
+/* Název projektu s možností zalamování */
+::deep .project-detail-title {
+	word-wrap: break-word !important;
+	word-break: break-word !important;
+	max-width: 100% !important;
+	display: block !important;
+	font-weight: 600 !important;
+	margin-right: 16px !important;
+}
+
+/* Popis projektu s možností více řádků */
+::deep .project-detail-description {
+	word-wrap: break-word !important;
+	word-break: break-word !important;
+	max-width: 100% !important;
+	line-height: 1.5 !important;
+	margin-right: 16px !important;
+}
+
+/* Prázdný popis projektu */
+::deep .project-detail-empty-description {
+	font-style: italic;
+	font-size: 0.875rem;
+}
+
+/*AKČNÍ TLAČÍTKA PROJEKTU */
+/*Kontejner pro akční tlačítka projektu */
+::deep .project-detail-actions-container {
+	border-radius: 8px !important;
+	background: var(--mud-palette-surface);
+	border: 1px solid var(--mud-palette-lines-default);
+}
+
+/*VYHLEDÁVÁNÍ A FILTRY */
+/*Styly pro vyhledávací pole */
+::deep .project-detail-search-field .mud-input-outlined .mud-input-outlined-border {
+	border-radius: 6px !important;
+}
+
+/* Styly pro filtr podle stavu */
+::deep .project-detail-filter-select .mud-input-outlined .mud-input-outlined-border {
+	border-radius: 6px !important;
+}
+
+/* Tlačítka v hlavičce */
+::deep .project-detail-action-button {
+	border-radius: 6px !important;
+}
+
+/* Tlačítko pro vytvoření nového úkolu */
+::deep .project-detail-create-button {
+	border-radius: 8px !important;
+	font-weight: 600;
+}
+
+/* Tlačítko pro úpravu projektu */
+::deep .project-detail-edit-button {
+	border-radius: 8px !important;
+	font-weight: 500;
+}
+
+/* Tlačítko pro návrat zpět */
+::deep .project-detail-back-button {
+	border-radius: 8px !important;
+	font-weight: 500;
+}
+
+/*STATISTICKÉ KARTY */
+/*Karty s přehledem úkolů v projektu */
+::deep .project-detail-stats-card {
+	border-radius: 8px !important;
+	border: 1px solid var(--mud-palette-lines-default);
+	background: var(--mud-palette-surface);
+}
+
+/* Ikony ve statistických kartách */
+.project-detail-stats-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 12px;
+}
+
+/* Text ve statistických kartách */
+::deep .project-detail-stats-text {
+	font-weight: 600 !important;
+}
+
+/*TABULKA ÚKOLŮ */
+/*Hlavní kontejner tabulky úkolů */
+::deep .project-detail-table-container {
+	border-radius: 8px !important;
+	border: 1px solid var(--mud-palette-lines-default);
+	overflow: hidden;
+	background: var(--mud-palette-surface);
+}
+
+/* Toolbar tabulky */
+.project-detail-table-toolbar {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	padding: 16px 24px;
+	background: var(--mud-palette-background-grey) !important;
+	border-bottom: 1px solid var(--mud-palette-lines-default);
+}
+
+/* Nadpis tabulky */
+::deep .project-detail-table-title {
+	font-weight: 600 !important;
+}
+
+/* Indikátor synchronizace v tabulce */
+::deep .project-detail-sync-indicator {
+	border-radius: 12px !important;
+	font-size: 0.75rem;
+}
+
+/* Hlavička tabulky */
+::deep .project-detail-table-header {
+	background: var(--mud-palette-background-grey) !important;
+	font-weight: 600 !important;
+	border-bottom: 1px solid var(--mud-palette-lines-default) !important;
+}
+
+/* Buňky tabulky */
+::deep .project-detail-table-cell {
+	border-bottom: 1px solid var(--mud-palette-lines-inputs) !important;
+	padding: 12px 24px;
+}
+
+/* Klikatelné řádky */
+::deep .project-detail-clickable-row {
+	cursor: pointer !important;
+}
+
+/* Stránkování tabulky */
+::deep .project-detail-table-pager,
+::deep .project-detail-table-container .mud-table-pager,
+::deep .mud-table .mud-table-pager,
+::deep .mud-table-container .mud-table-pager,
+::deep div.mud-table-pager,
+::deep .mud-table .mud-table-container > div:last-child,
+::deep .project-detail-table-container > div:last-child {
+	background: var(--mud-palette-background-grey) !important;
+	padding: 4px 24px !important;
+}
+
+/*OBSAH TABULKY */
+/*Styling těla tabulky */
+::deep .project-detail-data-table .mud-toolbar {
+	padding: 0 !important;
+	background: transparent !important;
+}
+
+::deep .mud-table tbody {
+	background: var(--mud-palette-surface) !important;
+}
+
+/*NÁZVY A POPISY ÚKOLŮ */
+/*Zkrácení dlouhých textů v tabulce */
+::deep .project-detail-task-title {
+	white-space: nowrap !important;
+	overflow: hidden !important;
+	text-overflow: ellipsis !important;
+	max-width: 250px !important;
+	display: block !important;
+}
+
+::deep .project-detail-task-description {
+	white-space: nowrap !important;
+	overflow: hidden !important;
+	text-overflow: ellipsis !important;
+	max-width: 200px !important;
+	display: block !important;
+}
+
+/* Text s datem */
+::deep .project-detail-date-text {
+	color: var(--mud-palette-text-secondary);
+	font-size: 0.875rem;
+}
+
+/*CHIPY A INDIKÁTORY */
+/*Styly pro různé chipy v tabulce */
+::deep .project-detail-date-chip,
+::deep .project-detail-priority-chip,
+::deep .project-detail-status-chip {
+	border-radius: 12px !important;
+	font-weight: 500 !important;
+}
+
+/* Ikona synchronizace s animací */
+.project-detail-sync-icon {
+	animation: spin 2s linear infinite;
+}
+
+/*AKČNÍ TLAČÍTKA TABULKY */
+/*Skupina akčních tlačítek v tabulce */
+::deep .project-detail-action-buttons {
+	gap: 4px;
+}
+
+/* Jednotlivá akční tlačítka v tabulce */
+::deep .project-detail-table-action-button {
+	border-radius: 6px !important;
+}
+
+/*PRÁZDNÁ TABULKA */
+/*Obsah zobrazený při prázdné tabulce */
+.project-detail-no-records {
+	text-align: center;
+	padding: 48px 24px;
+}
+
+/*RESPONZIVNÍ DESIGN PRO MOBILY */
+/*Přizpůsobení pro tablety a menší displeje */
+@media (max-width: 768px) {
+	/*Zmenšení vnitřního odsazení akčního kontejneru na mobilech */
+	::deep .project-detail-actions-container {
+		padding: 16px !important;
+	}
+
+	/*Horizontální layout toolbaru tabulky s menším paddingem */
+	.project-detail-table-toolbar {
+		padding: 12px 16px;
+		gap: 8px;
+		align-items: center;
+	}
+
+	/*Ořezání názvů úkolů v tabulce na mobilech */
+	::deep .project-detail-task-title {
+		max-width: 180px !important;
+	}
+
+	/*Ořezání popisů úkolů v tabulce na mobilech */
+	::deep .project-detail-task-description {
+		max-width: 150px !important;
+	}
+
+	/*Flexbox layout pro mobilní hlavičku s možností zalamování */
+	::deep .project-detail-mobile-header {
+		flex-wrap: wrap !important;
+	}
+
+	/*Avatar projektu jako první prvek vlevo nahoře */
+	.project-detail-header-icon {
+		order: 1 !important;
+		flex: 0 0 auto !important;
+	}
+
+	/*Akční ikony jako druhý prvek vpravo nahoře v řádku */
+	.project-detail-header-actions {
+		order: 2 !important;
+		flex: 1 1 auto !important;
+		justify-content: flex-end !important;
+		flex-direction: row !important;
+		gap: 8px !important;
+	}
+
+	/*Obsah projektu jako třetí prvek na celé šířce pod hlavičkou */
+	::deep .project-detail-mobile-content {
+		order: 3 !important;
+		flex: 1 1 100% !important;
+		width: 100% !important;
+		margin-top: 16px !important;
+	}
+}
+
+/*Responzivní design pro velmi malé displeje */
+@media (max-width: 480px) {
+	/*zkrácení názvů úkolů na velmi malých mobilech */
+	::deep .project-detail-task-title {
+		max-width: 120px !important;
+	}
+
+	/*zkrácení popisů úkolů na velmi malých mobilech */
+	::deep .project-detail-task-description {
+		max-width: 100px !important;
+	}
+
+	/*Zmenšení výšky a velikosti akčních tlačítek */
+	::deep .project-detail-create-button,
+	::deep .project-detail-edit-button,
+	::deep .project-detail-back-button {
+		height: 36px !important;
+		min-height: 36px !important;
+		padding: 4px 12px !important;
+		font-size: 0.8rem !important;
+		line-height: 1.2 !important;
+	}
+
+	/*Zmenšení ikon v akčních tlačítkách */
+	::deep .project-detail-create-button .mud-icon-root,
+	::deep .project-detail-edit-button .mud-icon-root,
+	::deep .project-detail-back-button .mud-icon-root {
+		font-size: 1.1rem !important;
+	}
+}
+
+/*CSS ANIMACE PRO INDIKÁTORY */
+/*Rotační animace pro ikonu synchronizace */
+@keyframes spin {
+	from {
+		transform: rotate(0deg);
+	}
+
+	to {
+		transform: rotate(360deg);
+	}
+}

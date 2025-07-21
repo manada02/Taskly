@@ -1,0 +1,26 @@
+﻿@* Hlavní router komponenta - zajišťuje směrování URL na správné komponenty a přepíná mezi layouty podle platformy *@
+@using Microsoft.Maui.Devices
+
+<Router AppAssembly="@typeof(MauiProgram).Assembly">
+    <Found Context="routeData">
+        @* Konfigurace pro nalezené cesty - zobrazuje odpovídající komponentu s platformně specifickým layoutem, který jsem vytvořil *@
+        <RouteView RouteData="@routeData" DefaultLayout="@GetLayoutType()" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        @* Konfigurace pro nenalezené cesty - zobrazí chybovou stránku se stejným layoutem *@
+        <LayoutView Layout="@GetLayoutType()">
+            <p>Promiňte, tato stránka neexistuje!</p>
+        </LayoutView>
+    </NotFound>
+</Router>
+
+@code {
+    @* Pomocná metoda pro získání typu layoutu podle aktuální platformy -pro Android mám speciální layout *@
+    private Type GetLayoutType()
+    {
+        return DeviceInfo.Platform == DevicePlatform.Android
+            ? typeof(Taskly.Components.Layout.AndroidMainLayout)
+            : typeof(Taskly.Components.Layout.MainLayout);
+    }
+}

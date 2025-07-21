@@ -1,0 +1,242 @@
+/*PROJEKT DIALOG SE STYLY */
+
+/*Hlavní kontejner dialogu pro editaci projektù */
+::deep .project-dialog-container {
+	border-radius: 16px !important;
+	animation: slideInUp 0.3s ease-out;
+}
+
+/* Dialogové okno se zaoblenými rohy */
+::deep .project-dialog-container .mud-dialog-surface {
+	border-radius: 16px !important;
+}
+
+/* Stylování kalendáøe pro výbìr data v projektu */
+::deep .mud-picker-calendar-container {
+	transform: scale(0.95);
+	margin-bottom: 10px;
+	border-radius: 12px !important;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+	overflow-y: auto;
+}
+
+/*HLAVIÈKA DIALOGU */
+/*Header sekce s ikonou a názvem projektu */
+.project-dialog-header {
+	padding: 8px 0;
+	border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+/* Nadpis dialogu */
+::deep .project-dialog-title {
+	font-weight: 600 !important;
+	color: var(--mud-palette-text-primary);
+}
+
+/* Oøezání dlouhého názvu projektu */
+::deep .project-title-ellipsis {
+	white-space: nowrap !important;
+	overflow: hidden !important;
+	text-overflow: ellipsis !important;
+	max-width: 350px !important;
+	display: block !important;
+}
+
+/*FORMULÁØOVÉ PRVKY */
+/*Základní styly pro všechna formuláøová pole */
+::deep .project-form-field .mud-input-outlined .mud-input-outlined-border,
+::deep .project-color-picker .mud-input-outlined .mud-input-outlined-border,
+::deep .project-date-picker .mud-input-outlined .mud-input-outlined-border {
+	border-radius: 12px !important;
+	transition: all 0.2s ease;
+}
+
+/* Hover efekty pro formuláøová pole */
+::deep .project-form-field .mud-input-outlined:hover .mud-input-outlined-border,
+::deep .project-color-picker .mud-input-outlined:hover .mud-input-outlined-border,
+::deep .project-date-picker .mud-input-outlined:hover .mud-input-outlined-border {
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Focus efekty pro formuláøová pole */
+::deep .project-form-field .mud-input-outlined.mud-input-outlined-focused .mud-input-outlined-border,
+::deep .project-color-picker .mud-input-outlined.mud-input-outlined-focused .mud-input-outlined-border,
+::deep .project-date-picker .mud-input-outlined.mud-input-outlined-focused .mud-input-outlined-border {
+	box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}
+
+/* Textarea pro popis projektu s možností zmìny velikosti */
+::deep .project-description-textarea textarea {
+	resize: vertical !important;
+	min-height: 80px !important;
+	max-height: 400px !important;
+}
+
+/* Border pro textarea */
+::deep .project-description-textarea .mud-input-outlined .mud-input-outlined-border {
+	border-radius: 12px !important;
+	transition: all 0.2s ease;
+}
+
+/*SEKCE UPOZORNÌNÍ */
+/*Hlavní kontejner pro nastavení pøipomínek */
+.project-reminder-section {
+	background: var(--mud-palette-background-grey);
+	border-radius: 12px;
+	padding: 16px;
+	border: 1px solid rgba(0, 0, 0, 0.06);
+	margin-top: 8px;
+}
+
+/* Nadpis sekce upozornìní */
+::deep .reminder-section-title {
+	display: flex;
+	align-items: center;
+	font-weight: 600 !important;
+	margin-bottom: 8px;
+}
+
+/* Stav kdy není nastaven termín projektu */
+.reminder-disabled-state {
+	text-align: center;
+	padding: 16px;
+	background: rgba(0, 0, 0, 0.02);
+	border-radius: 8px;
+	border: 2px dashed rgba(0, 0, 0, 0.1);
+}
+
+/*CHIPY PRO UPOZORNÌNÍ */
+/*Kontejner pro chipy s výbìrem upozornìní */
+::deep .reminder-chips-container {
+	gap: 5px;
+	display: flex !important;
+	flex-wrap: nowrap !important;
+}
+
+/* Jednotlivé chipy pro èasové intervaly */
+::deep .reminder-chip {
+	border-radius: 20px !important;
+	font-weight: 500 !important;
+	padding: 8px 16px !important;
+	transition: all 0.2s ease !important;
+}
+
+/* Hover efekt pro chipy */
+::deep .reminder-chip:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+/*STAVOVÉ ALERTY */
+/*Styly pro upozornìní a stavové zprávy */
+::deep .project-status-alert {
+	border-radius: 12px !important;
+	border: none !important;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Zarovnání ikon v alertech */
+::deep .project-status-alert .mud-alert-message {
+	display: flex;
+	align-items: center;
+}
+
+/*AKÈNÍ TLAÈÍTKA */
+/*Kontejner pro tlaèítka dialogu */
+.project-dialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 15px;
+	width: 100%;
+	padding: 20px 0;
+}
+
+/* Stylování oblasti s tlaèítky */
+::deep .project-dialog-container .mud-dialog-actions {
+	padding: 20px 24px !important;
+	background: var(--mud-palette-background-grey) !important;
+	backdrop-filter: blur(10px) !important;
+	border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Tlaèítko pro zrušení */
+::deep .project-cancel-button {
+	border-radius: 20px !important;
+	font-weight: 500;
+	padding: 8px 20px;
+}
+
+/* Hlavní submit tlaèítko */
+::deep .project-submit-button {
+	border-radius: 20px !important;
+	font-weight: 600;
+	padding: 8px 24px;
+	box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+	transition: all 0.2s ease;
+}
+
+/* Hover efekt pro submit tlaèítko */
+::deep .project-submit-button:hover:not(:disabled) {
+	transform: translateY(-1px);
+	box-shadow: 0 4px 16px rgba(25, 118, 210, 0.4);
+}
+
+/* Disabled stav pro submit tlaèítko */
+::deep .project-submit-button:disabled {
+	opacity: 0.5;
+}
+
+/*RESPONZIVNÍ DESIGN PRO MOBILY */
+/*Pøizpùsobení pro tablety a menší displeje */
+@media (max-width: 768px) {
+	.project-dialog-header {
+		padding: 12px 0;
+	}
+
+	.project-reminder-section {
+		padding: 12px;
+	}
+
+	.project-dialog-actions {
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	::deep .project-dialog-actions .mud-button {
+		width: 100%;
+		order: 1;
+	}
+
+	::deep .project-cancel-button {
+		order: 2;
+	}
+
+	::deep .project-dialog-container .mud-dialog-actions {
+		padding: 16px !important;
+	}
+
+	::deep .project-title-ellipsis {
+		max-width: 250px !important;
+	}
+}
+
+/* Responzivní design pro velmi malé displeje */
+@media (max-width: 480px) {
+	::deep .project-title-ellipsis {
+		max-width: 200px !important;
+	}
+}
+
+/*CSS ANIMACE PRO DIALOG */
+/*Animace pro objevení dialogu */
+@keyframes slideInUp {
+	from {
+		opacity: 0;
+		transform: translateY(20px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}

@@ -1,0 +1,94 @@
+﻿@* Potřebné namespace *@
+@using Taskly.Services.Auth                            
+@using Microsoft.Extensions.Logging   
+
+@* Služby pro DI *@
+@implements IDisposable
+@inject IAuthService FirebaseAuthService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject ILogger<MultiDeviceGuard> Logger
+@inject IJSRuntime JS
+@inject INotificationService NotificationService
+
+@* Prázdný element - komponenta nemá UI, pouze monitoruje a chrání uživatelskou relaci před přihlášením z více zařízení *@
+<div></div>
+
+@code {
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    // Inicializace komponenty - zaregistrujeme handler pro nucené odhlášení
+    protected override void OnInitialized()
+    {
+        Logger.LogInformation("SessionMonitor: Inicializace komponenty pro monitorování sessions");
+
+        // Zaregistrujeme se k odběru události při detekci přihlášení z jiného zařízení
+        FirebaseAuthService.ForcedLogoutDetected += HandleForcedLogout;
+
+        Logger.LogInformation("MultiDeviceGuard: Handler úspěšně registrován");
+        base.OnInitialized();
+    }
+
+    // EVENT HANDLERY
+    // Zpracování situace, kdy je uživatel nuceně odhlášen - např. když se přihlásí z jiného zařízení
+    // Tohle je důležitá bezpečnostní funkce proti současnému používání jednoho účtu na více zařízeních
+    private async void HandleForcedLogout()
+    {
+        try
+        {
+            Logger.LogWarning("MultiDeviceGuard: ZAČÁTEK zpracování nuceného odhlášení");
+
+            // 1. Nejprve uložíme důležitou bezpečnostní událost do historie a nastavíme ji pro zobrazení po přesměrování
+            await NotificationService.AddNotificationAsync(new NotificationItem
+                {
+                    Message = "Byli jste odhlášeni - byl detekován přístup z jiného zařízení",
+                    Type = NotificationType.Warning,
+                    Category = NotificationCategory.System,
+                    Title = "Bezpečnostní upozornění"
+                }, showAfterForceLoad: true);
+
+            Logger.LogInformation("MultiDeviceGuard: Zobrazujeme notifikaci o nuceném odhlášení");
+
+            // 2. Informujeme zbytek aplikace o změně stavu přihlášení
+            Logger.LogInformation("MultiDeviceGuard: Notifikujeme změnu stavu autentizace");
+            FirebaseAuthService.NotifyAuthenticationStateChanged(false);
+
+            // 3. Přesměrujeme uživatele na přihlašovací stránku
+            Logger.LogInformation("MultiDeviceGuard: Zahajujeme přesměrování na /login");
+
+            // Přesměrování s forceLoad - notifikace bude zobrazena po načtení přihlašovací stránky
+            // Tohle je potřeba, protože chceme úplně nové načtení aplikace
+            NavigationManager.NavigateTo("/login", forceLoad: true);
+
+            // Krátká pauza pro zajištění, že přesměrování má nejvyšší prioritu
+            await Task.Delay(50);
+
+            Logger.LogInformation("MultiDeviceGuard: KONEC zpracování nuceného odhlášení");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "MultiDeviceGuard: CHYBA při zpracování nuceného odhlášení");
+
+            // Záložní řešení - zkusíme jen JS redirect
+            // Tohle je pojistka, kdybychom měli problém s NavigationManager
+            try
+            {
+                NotificationService.ShowToast("Byli jste odhlášeni - byl detekován přístup z jiného zařízení", NotificationType.Warning);
+
+                Logger.LogWarning("MultiDeviceGuard: Zkoušíme záložní JavaScript redirect");
+                await JS.InvokeVoidAsync("window.location.href", "/login");
+            }
+            catch
+            {
+                // Ignorujeme chyby v záložním řešení - už nemáme co udělat
+            }
+        }
+    }
+
+    // UVOLNĚNÍ ZDROJŮ
+    // Uvolníme zdroje komponenty - odregistrujeme event handlery pro předejití memory leaků
+    public void Dispose()
+    {
+        Logger.LogInformation("SessionMonitor: Odregistrace handleru při ukončení");
+        FirebaseAuthService.ForcedLogoutDetected -= HandleForcedLogout;
+    }
+}

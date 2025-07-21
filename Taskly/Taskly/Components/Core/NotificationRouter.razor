@@ -1,0 +1,41 @@
+﻿@* Potřebné namespace *@
+@using Taskly.Services.Notification
+
+@* Služby pro DI *@
+@implements IDisposable
+@inject INotificationService NotificationService
+@inject NavigationManager Navigation
+
+@* Prázdný element - komponenta nemá UI, pouze zpracovává a zobrazuje notifikace napříč navigací v aplikaci *@
+<div></div>
+
+@code {
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    // Inicializace komponenty - kontrola notifikací a registrace událostí
+    protected override async Task OnInitializedAsync()
+    {
+        // Nejprve zkontrolujeme, jestli nemáme čekající notifikace po forceLoad
+        // Tohle je důležité pro zobrazení notifikací, které přetrvaly přes přesměrování
+        await NotificationService.CheckForPendingToastAsync();
+
+        // Zaregistrujeme se k události změny URL - to je potřeba pro běžnou navigaci
+        Navigation.LocationChanged += HandleLocationChanged;
+    }
+
+    // EVENT HANDLERY
+    // Zpracování události změny lokace - kontrola čekajících notifikací
+    private async void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        // Po každé navigaci zkontrolujeme, jestli nemáme nějaké čekající notifikace
+        // díky tomu můžeme zobrazit notifikace i při přechodu mezi stránkami
+        await NotificationService.CheckForPendingToastAsync();
+    }
+
+    // UVOLNĚNÍ ZDROJŮ
+    // Uvolníme zdroje komponenty - odregistrujeme event handlery pro předejití memory leaků
+    public void Dispose()
+    {
+        // Odhlásíme se z události změny lokace
+        Navigation.LocationChanged -= HandleLocationChanged;
+    }
+}

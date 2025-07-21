@@ -1,0 +1,49 @@
+
+::deep .task-management-nav-menu {
+	padding: 8px 0;
+}
+
+::deep .mud-nav-link {
+	height: 48px;
+	border-radius: 4px;
+	transition: background-color 0.2s ease;
+}
+
+::deep .mud-nav-link:hover {
+	background-color: rgba(var(--mud-palette-primary-rgb), 0.1);
+}
+
+::deep .mud-nav-link.active,
+::deep .mud-nav-link.mud-nav-link-active,
+::deep .mud-selected-item { 
+	background-color: rgba(var(--mud-palette-primary-rgb), 0.15);
+	font-weight: 500;
+}
+
+::deep .task-management-nav-group,
+::deep .project-management-nav-group {
+	padding: 0;
+	margin-bottom: 8px;
+}
+
+::deep .mud-nav-group > .mud-nav-group-title {
+	font-weight: 500;
+	letter-spacing: 0.5px;
+	padding: 0 16px;
+	margin: 8px 8px 4px 8px;
+}
+
+::deep .mud-nav-link .mud-icon-root {
+	margin-right: 12px;
+	font-size: 1.25rem;
+}
+
+@media (min-width: 481px) {
+	::deep .mud-nav-link {
+		height: 40px;
+	}
+
+	::deep .mud-nav-group > .mud-expand-panel > .mud-expand-panel-content {
+		padding-left: 8px;
+	}
+}

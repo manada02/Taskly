@@ -1,0 +1,120 @@
+﻿@page "/register"
+
+@* Potřebné namespace *@
+@using System.ComponentModel.DataAnnotations
+@using Taskly.Models
+@using Taskly.Services.Auth
+
+@* Služby pro DI *@
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject IAuthService FirebaseAuthService
+@inject INotificationService NotificationService
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+    <MudCard Elevation="4" Class="pa-4">
+        <MudCardHeader>
+            <MudText Typo="Typo.h4" Align="Align.Center">Registrace</MudText>
+        </MudCardHeader>
+        <MudCardContent>
+
+            @* Registrační formulář *@
+            <EditForm Model="@registrationModel" OnValidSubmit="HandleRegistration">
+                <DataAnnotationsValidator />
+
+                @* Pole pro uživatelské jméno *@
+                <MudTextField T="string"
+                              @bind-Value="registrationModel.Username"
+                              For="@(() => registrationModel.Username)"
+                              Label="Uživatelské jméno"
+                              Class="mb-4" />
+
+                @* Email *@
+                <MudTextField T="string"
+                              @bind-Value="registrationModel.Email"
+                              For="@(() => registrationModel.Email)"
+                              Label="Email"
+                              InputType="InputType.Email"
+                              Class="mb-4" />
+
+                @* Heslo *@
+                <MudTextField T="string"
+                              @bind-Value="registrationModel.Password"
+                              For="@(() => registrationModel.Password)"
+                              Label="Heslo"
+                              InputType="InputType.Password"
+                              Class="mb-4" />
+
+                @* Potvrzení hesla *@
+                <MudTextField T="string"
+                              @bind-Value="registrationModel.ConfirmPassword"
+                              For="@(() => registrationModel.ConfirmPassword)"
+                              Label="Potvrzení hesla"
+                              InputType="InputType.Password"
+                              Class="mb-6" />
+
+                @* Registrační tlačítko *@
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Large"
+                           FullWidth="true"
+                           ButtonType="ButtonType.Submit"
+                           Class="mb-2"
+                           Disabled="@isProcessing">
+                    @if (isProcessing)
+                    {
+                        <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+                    }
+                    else
+                    {
+                        @("Zaregistrovat se")
+                    }
+                </MudButton>
+
+                @* Odkaz na přihlášení *@
+                <MudText Align="Align.Center">
+                    Již máte účet?
+                    <MudLink Href="/login">Přihlaste se</MudLink>
+                </MudText>
+            </EditForm>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    // Model pro registrační data
+    private UserRegistrationDto registrationModel = new();
+    // Flag pro indikaci průběhu registrace
+    private bool isProcessing = false;
+
+    // Zpracování registrace
+    private async Task HandleRegistration()
+    {
+        if (isProcessing) return;
+        try
+        {
+            isProcessing = true;
+            // Volání Firebase služby
+            var user = await FirebaseAuthService.RegisterAsync(registrationModel);
+
+            // Úspěšná registrace - přesměrování
+            NotificationService.ShowToast("Byli jste úspěšně registrováni. Nyní se můžete přihlásit.", NotificationType.Success);
+            NavigationManager.NavigateTo("/login");
+        }
+        catch (ApplicationException ex)
+        {
+            // Chyba aplikace - např. duplicitní email
+            NotificationService.ShowToast(ex.Message, NotificationType.Error);
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            // Obecná chyba
+            NotificationService.ShowToast("Při registraci došlo k neočekávané chybě. Zkuste to prosím později.", NotificationType.Error);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}

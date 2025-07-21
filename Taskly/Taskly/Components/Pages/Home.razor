@@ -1,0 +1,711 @@
+﻿@page "/"
+@using Taskly.Models
+@* Namespace a importy *@
+@using Taskly.Components.Core
+@using Taskly.Services.Tasks
+@using Taskly.Services.Projects
+@using Taskly.Services.Auth
+@using Taskly.Services.Connectivity
+@using System.Linq
+
+@* Služby pro DI *@
+@inject ITaskService TaskService
+@inject IProjectService ProjectService
+@inject ConnectivityService ConnectivityService
+@inject IAuthService AuthService
+@inject ICacheService CacheService
+@inject INotificationService NotificationService
+@inject NavigationManager NavigationManager
+@inject DashboardInitializer DashboardInitializer
+
+<div>
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+        <MudPaper Elevation="2" Class="pa-6 dashboard-container">
+
+            @* Hlavička dashboardu s ikonou, nadpisy a akčními prvky *@
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mb-4">
+
+                        @* Logo aplikace *@
+                        <div class="header-icon">
+                            <MudImage Src="images/taskly_logo.png"
+                                      Alt="Taskly Logo"
+                                      Width="48"
+                                      Height="48"
+                                      Style="border-radius: 6px;"
+                                      Class="dashboard-app-logo" />
+                        </div>
+                         
+                        <div>
+                            @* Plný název pro desktop *@
+                            <MudHidden Breakpoint="Breakpoint.MdAndDown" Invert="false">
+                                <MudText Typo="Typo.h4" Class="dashboard-title">Vítejte v aplikaci Taskly</MudText>
+                            </MudHidden>
+
+                            @* Kratší název pro tablety a mobily *@
+                            <MudHidden Breakpoint="Breakpoint.MdAndDown" Invert="true">
+                                <MudText Typo="Typo.h4" Class="dashboard-title">Vítejte v Taskly</MudText>
+                            </MudHidden>
+
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="dashboard-subtitle">
+                                @if (isAuthenticated)
+                                {
+                                    @($"Dobrý den, {currentUser?.Username ?? "uživateli"}")
+                                }
+                                else
+                                {
+                                    @("Pro přístup ke všem funkcím se přihlaste")
+                                }
+                            </MudText>
+                        </div>
+                        <MudSpacer />
+
+                        @*  Stavové indikátory a uživatelský profil *@
+                        <div class="header-actions">
+                            @* Indikátor synchronizace *@
+                            @if (isSynchronizing)
+                            {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Secondary" />
+                            }
+
+                            @* Stav připojení k internetu *@
+                            <MudTooltip Text="@(isConnected ? "Online" : "Offline")">
+                                <div class="connection-status">
+                                    <MudIcon Icon="@(isConnected ? Icons.Material.Filled.CloudDone : Icons.Material.Filled.CloudOff)"
+                                             Color="@(isConnected ? Color.Success : Color.Error)"
+                                             Size="Size.Large" />
+                                </div>
+                            </MudTooltip>
+
+                            @* Animovaný chip pro čekající synchronizaci *@
+                            @if (pendingSyncCount > 0 && isAuthenticated && (TaskInitializer.IsInitialized || isInitializerCompleted))
+                            {
+                                    <MudChip T="string" Icon="@Icons.Material.Filled.Sync"
+                                             Color="Color.Warning"
+                                             Size="Size.Small"
+                                             Class="sync-chip">
+                                    @($"{pendingSyncCount} změn čeká na synchronizaci")
+                                    </MudChip>
+                            }
+
+                            @* Avatar přihlášeného uživatele *@
+                            <MudTooltip Text="@(isAuthenticated ? $"Přihlášen jako {currentUser?.Username ?? currentUser?.Email ?? "uživatel"}" : "Nepřihlášený uživatel")" Placement="Placement.Start">
+                                @if (isAuthenticated)
+                                {
+                                        <MudAvatar Color="Color.Primary" Size="Size.Large" Class="user-profile-avatar">
+                                        @if (isLoadingImage)
+                                        {
+                                                    <MudProgressCircular Color="Color.Default" Size="Size.Small" Indeterminate="true" />
+                                        }
+                                        else if (!string.IsNullOrWhiteSpace(currentImageUrl))
+                                        {
+                                                    <MudImage Src="@currentImageUrl"
+                                                              Alt="Profile"
+                                                              Elevation="0"
+                                                              Fluid="true"
+                                                              ObjectFit="ObjectFit.Cover"
+                                                              @onerror="HandleImageError" />
+                                        }
+                                        else if (currentUser?.Username?.Length > 0)
+                                        {
+                                            @(currentUser.Username[0].ToString().ToUpper())
+                                        }
+                                        else
+                                        {
+                                                    <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Size="Size.Large" />
+                                        }
+                                        </MudAvatar>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.NoAccounts" Color="Color.Default" Size="Size.Large" />
+                                }
+                            </MudTooltip>
+                        </div>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+
+            @* Hlavní obsah dashboardu - statistiky a aktivita *@
+            <MudGrid Class="mt-6">
+                <MudItem xs="12" md="8">
+                    <MudText Typo="Typo.h5" Class="mb-4">Vaše aktivita</MudText>
+
+                     @* Statistické karty s klíčovými metrikami *@ 
+                    <MudGrid Spacing="3">
+                         @* Karta: Dokončené úkoly s progress kruhem *@ 
+                        <MudItem xs="12" md="4">
+                            <MudPaper Elevation="1" Class="stats-card pa-4" Style="min-height: 180px">
+                                <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center">
+                                    <div class="stats-icon" Style="height: 48px; display: flex; align-items: center; justify-content: center;">
+                                        @if (completedTasks > 0)
+                                        {
+                                                <MudProgressCircular Value="@GetCompletionPercentage()"
+                                                                     Color="Color.Success"
+                                                                     Size="Size.Large"
+                                                                     StrokeWidth="5" />
+                                        }
+                                        else
+                                        {
+                                                <MudIcon Icon="@Icons.Material.Filled.DonutLarge"
+                                                         Color="Color.Default"
+                                                         Size="Size.Large" />
+                                        }
+                                    </div>
+                                    <MudText Typo="Typo.body1" Class="mt-2">Dokončeno úkolů</MudText>
+                                    <MudText Typo="Typo.h6" Class="stats-number">@completedTasks z @totalTasks</MudText>
+                                </MudStack>
+                            </MudPaper>
+                        </MudItem>
+
+                         @* Karta: Aktivní úkoly *@ 
+                        <MudItem xs="12" md="4">
+                            <MudPaper Elevation="1" Class="stats-card pa-4" Style="min-height: 180px">
+                                <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center">
+                                    <div class="stats-icon" Style="height: 48px; display: flex; align-items: center; justify-content: center;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Assignment"
+                                                 Color="Color.Primary"
+                                                 Size="Size.Large" />
+                                    </div>
+                                    <MudText Typo="Typo.body1" Class="mt-2">Aktivní úkoly</MudText>
+                                    <MudText Typo="Typo.h6" Class="stats-number">@(totalTasks - completedTasks)</MudText>
+                                </MudStack>
+                            </MudPaper>
+                        </MudItem>
+
+                         @* Karta: Celkový počet projektů  *@
+                        <MudItem xs="12" md="4">
+                            <MudPaper Elevation="1" Class="stats-card pa-4" Style="min-height: 180px">
+                                <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center">
+                                    <div class="stats-icon" Style="height: 48px; display: flex; align-items: center; justify-content: center;">
+                                        <MudIcon Icon="@Icons.Material.Filled.Folder"
+                                                 Color="Color.Info"
+                                                 Size="Size.Large" />
+                                    </div>
+                                    <MudText Typo="Typo.body1" Class="mt-2">Projekty</MudText>
+                                    <MudText Typo="Typo.h6" Class="stats-number">@totalProjects</MudText>
+                                </MudStack>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+
+                     @* Seznam nadcházejících termínů úkolů  *@
+                    <MudText Typo="Typo.h5" Class="mt-6 mb-3">Nadcházející termíny</MudText>
+                    @if (upcomingTasks.Any())
+                    {
+                            <MudPaper Elevation="1" Class="content-container">
+                                <MudList T="string" Dense="true" Class="pa-0">
+                                @foreach (var task in upcomingTasks)
+                                {
+                                             @* Klikatelná položka úkolu s termínem *@ 
+                                            <MudListItem T="string" OnClick="@(() => NavigateToTask(task.Id))"
+                                                         Icon="@GetPriorityIcon(task.Priority)"
+                                                         Class="list-item clickable-item">
+                                                <MudStack Row="true" Class="flex-grow-1" Spacing="2" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                                                    <MudTooltip Text="@task.Title" Placement="Placement.Top" Style="max-width: 300px; white-space: normal; word-break: break-word;">
+                                                        <MudText Typo="Typo.body2" Class="task-title" Style="max-width: min(250px, 40vw);">
+                                                    @task.Title
+                                                        </MudText>
+                                                    </MudTooltip>
+                                                    <MudChip T="string" Size="Size.Small"
+                                                             Color="@GetDeadlineColor(task.DueDate)"
+                                                             Icon="@(IsOverdue(task.DueDate) ? Icons.Material.Filled.Warning : Icons.Material.Filled.Schedule)"
+                                                             Class="date-chip">
+                                                @GetReadableDate(task.DueDate)
+                                                    </MudChip>
+                                                </MudStack>
+                                            </MudListItem>
+                                }
+                                </MudList>
+                            </MudPaper>
+                    }
+                    else
+                    {
+                            <MudAlert Severity="Severity.Info" Class="mt-2">Nemáte žádné nadcházející termíny úkolů.</MudAlert>
+                    }
+                </MudItem>
+
+                 @* Boční panel s rychlými akcemi a aktivitou *@ 
+                <MudItem xs="12" md="4">
+
+                     @* Rychlé akce pro vytváření obsahu *@ 
+                    <MudText Typo="Typo.h5" Class="mb-4">Rychlý přehled</MudText>
+                    <MudPaper Elevation="1" Class="actions-container pa-4">
+                        <MudStack Spacing="3">
+                            @*  Tlačítko pro vytvoření nového úkolu *@
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       FullWidth="true"
+                                       OnClick="OpenNewTaskDialog"
+                                       Class="action-button">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Assignment" />
+                                    <MudText>Nový úkol</MudText>
+                                </MudStack>
+                            </MudButton>
+
+                             @* Tlačítko pro vytvoření nového projektu  *@
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.CreateNewFolder"
+                                       FullWidth="true"
+                                       OnClick="OpenNewProjectDialog"
+                                       Class="action-button">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Folder" />
+                                    <MudText>Nový projekt</MudText>
+                                </MudStack>
+                            </MudButton>
+
+                             @* Navigace na stránku se statistikami *@ 
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Info"
+                                       FullWidth="true"
+                                       Href="/statistics"
+                                       Class="action-button">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icons.Material.Filled.BarChart" />
+                                    <MudText>Statistiky</MudText>
+                                </MudStack>
+                            </MudButton>
+
+                             @* Navigace do nastavení aplikace  *@
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Default"
+                                       FullWidth="true"
+                                       Href="/settings"
+                                       Class="action-button">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudIcon Icon="@Icons.Material.Filled.Settings" />
+                                    <MudText>Nastavení</MudText>
+                                </MudStack>
+                            </MudButton>
+                        </MudStack>
+                    </MudPaper>
+
+                     @* Timeline s poslední aktivitou uživatele *@
+                    <MudText Typo="Typo.h5" Class="mt-6 mb-3">Poslední aktivita</MudText>
+                    <MudPaper Elevation="1" Class="content-container pa-3 overflow-hidden">
+                        @if (recentTasks.Any())
+                        {
+                                <MudTimeline>
+                                @foreach (var task in recentTasks.Take(3))
+                                {
+                                             @* Timeline položka s informacemi o úkolu *@ 
+                                            <MudTimelineItem Color="@GetStatusColor(task.Status)" Size="Size.Small">
+                                                <ItemContent>
+                                                    <MudText Typo="Typo.body1" Class="task-title" Style="max-width: 250px;">
+                                                @task.Title
+                                                    </MudText>
+                                                    <MudText Typo="Typo.caption">@task.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</MudText>
+                                                </ItemContent>
+                                            </MudTimelineItem>
+                                }
+                                </MudTimeline>
+                        }
+                        else
+                        {
+                                <MudText Typo="Typo.body2" Class="mud-text-disabled">Zatím nemáte žádnou aktivitu</MudText>
+                        }
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+    </MudContainer>
+</div>
+
+@code {
+    // PROMĚNNÉ A VLASTNOSTI
+    // Základní stavové proměnné pro řízení UI
+    private bool isAuthenticated = false;
+    private bool isConnected = false;
+    private AppUser? currentUser;
+    private bool isSynchronizing = false;
+
+    // Proměnné pro profilový obrázek
+    private string? currentImageUrl;
+    private bool isLoadingImage = false;
+
+    // Metriky pro dashboard
+    private int totalTasks = 0;
+    private int completedTasks = 0;
+    private int totalProjects = 0;
+    private int pendingSyncCount = 0;
+
+    // Data pro zobrazení na dashboardu
+    private List<TaskItem> recentTasks = new();
+    private List<TaskItem> upcomingTasks = new();
+
+    // Příznak dokončení inicializace úloh
+    private bool isInitializerCompleted = false;
+
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    // Inicializace komponenty - načtení dat a přihlášení k událostem
+    protected override async Task OnInitializedAsync()
+    {
+        base.OnInitialized();
+
+        // Kontrolujeme, zda je TaskInitializer již inicializován
+        if (TaskInitializer.IsInitialized)
+        {
+            isInitializerCompleted = true;
+            pendingSyncCount = TaskInitializer.PendingSyncCount;
+        }
+
+        // Rychlá kontrola přihlášení z lokálního úložiště
+        var quickCheck = await SecureStorage.GetAsync("user_logged_in");
+        bool isOfflineMode = !ConnectivityService.IsConnected;
+
+        // Nastavíme základní stav připojení
+        isConnected = ConnectivityService.IsConnected;
+
+        if (quickCheck == "true")
+        {
+            // Uživatel byl dříve přihlášen
+            isAuthenticated = true;
+            isLoadingImage = true;
+            StateHasChanged(); // Vynutíme překreslení pro zobrazení načítání
+
+            try
+            {
+                // Načteme uživatele z cache
+                currentUser = await CacheService.GetOrCreateAsync<AppUser>(
+                    "currentUser",
+                    () => Task.FromResult<AppUser>(null!),
+                    TimeSpan.FromHours(24));
+
+                if (currentUser != null)
+                {
+                    // Načteme URL obrázku z cache
+                    currentImageUrl = await CacheService.GetOrCreateAsync<string?>(
+                        "currentUserImageUrl",
+                        () => Task.FromResult<string?>(null),
+                        TimeSpan.FromHours(24));
+
+                    // Ihned aplikujeme změny v UI
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (Exception ex)
+            {
+                NotificationService.ShowToast($"Chyba při načítání uživatele: {ex.Message}", NotificationType.Error);
+            }
+            finally
+            {
+                isLoadingImage = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+
+        // Standardní inicializace pro případ, že rychlá kontrola selhala
+        if (!isAuthenticated)
+        {
+            isAuthenticated = await AuthService.IsUserAuthenticated();
+
+            if (isAuthenticated && currentUser == null)
+            {
+                // Načteme data o uživateli, pokud je přihlášen
+                currentUser = await CacheService.GetOrCreateAsync<AppUser>(
+                    "currentUser",
+                    () => AuthService.GetCurrentUserAsync(),
+                    TimeSpan.FromHours(24));
+
+                await LoadProfileImageAsync();
+            }
+        }
+
+        // Načteme data pro dashboard
+        await LoadDashboardDataAsync();
+
+        // Registrujeme se k událostem pro aktualizace UI
+        ConnectivityService.ConnectivityChanged += OnConnectivityChanged;
+        TaskService.OnTasksChanged += OnTasksChanged;
+        ProjectService.OnProjectsChanged += OnProjectsChanged;
+        DashboardInitializer.OnDashboardDataLoaded += OnDashboardDataLoaded;
+        TaskInitializer.OnInitializationCompleted += OnTaskInitializerCompleted;
+    }
+
+    // Dodatečné načtení po prvním vykreslení
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && isAuthenticated && currentImageUrl == null)
+        {
+            // Načteme profilový obrázek, pokud ještě nebyl načten
+            await LoadProfileImageAsync();
+        }
+    }
+
+    // EVENT HANDLERY
+    // Zpracování události dokončení inicializace úkolů
+    private void OnTaskInitializerCompleted()
+    {
+        // Nastavíme příznak dokončení inicializace
+        isInitializerCompleted = true;
+
+        // Aktualizujeme počet čekajících synchronizací z TaskInitializer
+        pendingSyncCount = TaskInitializer.PendingSyncCount;
+
+        // Vynutíme překreslení UI po dokončení inicializace
+        InvokeAsync(() =>
+        {
+            StateHasChanged();
+        });
+    }
+
+    // Zpracování události načtení dat dashboardu
+    private void OnDashboardDataLoaded()
+    {
+        InvokeAsync(DashboardRefreshAsync);
+    }
+
+    // Zpracování změny stavu připojení k internetu
+    private async void OnConnectivityChanged(bool isConnected)
+    {
+        this.isConnected = isConnected;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Zpracování událostí změny úkolů
+    private async void OnTasksChanged()
+    {
+        await InvokeAsync(LoadDashboardDataAsync);
+    }
+
+    // Zpracování událostí změny projektů
+    private async void OnProjectsChanged()
+    {
+        await InvokeAsync(LoadDashboardDataAsync);
+    }
+
+    // Zpracování chyby při načítání obrázku
+    private void HandleImageError()
+    {
+        // Když se nepodaří načíst obrázek, nastavíme URL na null,
+        // což způsobí přepnutí na zobrazení iniciály nebo ikony
+        currentImageUrl = null;
+        StateHasChanged();
+    }
+
+    // NAČÍTÁNÍ DAT
+    // Načtení dat pro dashboard
+    private async Task LoadDashboardDataAsync()
+    {
+        try
+        {
+            // Nejprve zkusíme získat data z DashboardInitializeru, který má předem načtená data
+            if (DashboardInitializer.IsDataLoaded)
+            {
+                // Použijeme předem načtená data z inicializéru pro rychlejší odezvu
+                totalTasks = DashboardInitializer.TotalTasks;
+                completedTasks = DashboardInitializer.CompletedTasks;
+                totalProjects = DashboardInitializer.TotalProjects;
+                pendingSyncCount = DashboardInitializer.PendingSyncCount;
+                recentTasks = DashboardInitializer.RecentTasks.ToList();
+                upcomingTasks = DashboardInitializer.UpcomingTasks.ToList();
+
+                return; // Data úspěšně získána z předem načtených dat
+            }
+
+            // Fallback - pokud data nejsou v DashboardInitializeru, načteme je standardně
+            var tasks = await TaskService.GetTasksAsync();
+            var projects = await ProjectService.GetProjectsAsync();
+
+            // Základní metriky pro dashboard
+            totalTasks = tasks.Count;
+            completedTasks = tasks.Count(t => t.Status == TaskItemStatus.Completed);
+            totalProjects = projects.Count;
+            pendingSyncCount = tasks.Count(t => t.NeedsSynchronization) + projects.Count(p => p.NeedsSynchronization);
+
+            // Poslední přidané úkoly pro sekci "Nedávné úkoly"
+            recentTasks = tasks
+                .OrderByDescending(t => t.CreatedAt)
+                .Take(5)
+                .ToList();
+
+            // Nadcházející termíny - úkoly s blížícími se termíny
+            upcomingTasks = tasks
+                .Where(t => t.Status != TaskItemStatus.Completed &&
+                          t.Status != TaskItemStatus.Cancelled &&
+                          t.DueDate.HasValue &&
+                          t.DueDate.Value > DateTime.UtcNow)  // Odstraněna podmínka časového okna
+                .OrderBy(t => t.DueDate)  // Seřazeno od nejbližších
+                .Take(7)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowToast($"Chyba při načítání dat: {ex.Message}", NotificationType.Error);
+        }
+    }
+
+    private bool IsOverdue(DateTime? dueDate)
+    {
+        if (!dueDate.HasValue) return false;
+        return dueDate.Value.ToUniversalTime() < DateTime.UtcNow;
+    }
+
+    // Načtení profilového obrázku uživatele
+    private async Task LoadProfileImageAsync()
+    {
+        try
+        {
+            isLoadingImage = true;
+            StateHasChanged();
+
+            // Použijeme cache pro rychlejší načítání
+            currentImageUrl = await CacheService.GetOrCreateAsync<string?>(
+                "currentUserImageUrl",
+                () => Task.FromResult<string?>(null),
+                TimeSpan.FromHours(24));
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowToast($"Chyba při načítání profilového obrázku: {ex.Message}", NotificationType.Error);
+            currentImageUrl = null;
+        }
+        finally
+        {
+            isLoadingImage = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // Aktualizace dat dashboardu po události
+    private async Task DashboardRefreshAsync()
+    {
+        await LoadDashboardDataAsync();
+        StateHasChanged();
+    }
+
+    // UI AKCE
+    // Otevření dialogu pro vytvoření nového úkolu
+    private void OpenNewTaskDialog()
+    {
+        // Navigujeme na stránku úkolů (vždy - protože jsme na hlavní stránce)
+        NavigationManager.NavigateTo("/tasks");
+
+        // Pro Windows potřebujeme timeout, aby se stránka stihla načíst
+        if (OperatingSystem.IsWindows())
+        {
+            Task.Delay(100).ContinueWith(_ =>
+            {
+                NavigationManager.NavigateTo("/tasks?action=new", forceLoad: false);
+            });
+        }
+        else
+        {
+            // Pro ostatní platformy můžeme rovnou otevřít dialog
+            NavigationManager.NavigateTo("/tasks?action=new", forceLoad: false);
+        }
+    }
+
+    // Otevření dialogu pro vytvoření nového projektu
+    private void OpenNewProjectDialog()
+    {
+        // Navigujeme na stránku projektů (vždy - protože jsme na hlavní stránce)
+        NavigationManager.NavigateTo("/projects");
+
+        // Pro Windows potřebujeme timeout, aby se stránka stihla načíst
+        if (OperatingSystem.IsWindows())
+        {
+            Task.Delay(100).ContinueWith(_ =>
+            {
+                NavigationManager.NavigateTo("/projects?action=new", forceLoad: false);
+            });
+        }
+        else
+        {
+            // Pro ostatní platformy můžeme rovnou otevřít dialog
+            NavigationManager.NavigateTo("/projects?action=new", forceLoad: false);
+        }
+    }
+
+    // Navigace na detail úkolu
+    private void NavigateToTask(string taskId)
+    {
+        NavigationManager.NavigateTo($"/tasks#task-{taskId}");
+    }
+
+    // POMOCNÉ METODY
+    // Výpočet procenta dokončených úkolů pro progress bar
+    private int GetCompletionPercentage()
+    {
+        if (totalTasks == 0) return 0;
+        return (int)Math.Round((double)completedTasks / totalTasks * 100);
+    }
+
+    // Získání ikony pro prioritu úkolu
+    private string GetPriorityIcon(TaskPriority priority) => priority switch
+    {
+        TaskPriority.Low => Icons.Material.Filled.KeyboardArrowDown,
+        TaskPriority.Medium => Icons.Material.Filled.Remove,
+        TaskPriority.High => Icons.Material.Filled.KeyboardArrowUp,
+        TaskPriority.Critical => Icons.Material.Filled.PriorityHigh,
+        _ => Icons.Material.Filled.Remove
+    };
+
+    // Získání barvy pro stav úkolu
+    private Color GetStatusColor(TaskItemStatus status) => status switch
+    {
+        TaskItemStatus.New => Color.Default,
+        TaskItemStatus.InProgress => Color.Info,
+        TaskItemStatus.Completed => Color.Success,
+        TaskItemStatus.Postponed => Color.Warning,
+        TaskItemStatus.Cancelled => Color.Error,
+        _ => Color.Default
+    };
+
+    // Získání barvy pro prioritu úkolu
+    private Color GetPriorityColor(TaskPriority priority) => priority switch
+    {
+        TaskPriority.Low => Color.Success,
+        TaskPriority.Medium => Color.Warning,
+        TaskPriority.High => Color.Error,
+        TaskPriority.Critical => Color.Error,
+        _ => Color.Default
+    };
+
+    // Získání barvy pro termín úkolu na základě blízkosti termínu
+    private Color GetDeadlineColor(DateTime? dueDate)
+    {
+        if (!dueDate.HasValue) return Color.Default;
+
+        var days = (dueDate.Value.ToLocalTime() - DateTime.Now).TotalDays;
+
+        if (days < 0) return Color.Error;        
+        if (days < 1) return Color.Warning;      
+        if (days < 7) return Color.Info;         
+        if (days < 30) return Color.Success;     
+        return Color.Default;                    
+    }
+
+    // Převod datumu na čitelný formát (Dnes, Zítra, atd.)
+    private string GetReadableDate(DateTime? date)
+    {
+        if (!date.HasValue) return "-";
+
+        var localDate = date.Value.ToLocalTime();
+        var now = DateTime.Now;
+        var diff = localDate - now;
+
+        if (localDate.Date == now.Date) return "Dnes";
+        if (localDate.Date == now.Date.AddDays(1)) return "Zítra";
+        if (diff.TotalDays < 7) return localDate.ToString("dddd"); // Den v týdnu
+
+        return localDate.ToString("dd.MM.yyyy");
+    }
+
+    // UVOLNĚNÍ ZDROJŮ
+    // Uvolní zdroje komponenty - odregistruje event handlery pro předejití memory leaků
+    public void Dispose()
+    {
+        // Odhlásíme se od všech událostí
+        ConnectivityService.ConnectivityChanged -= OnConnectivityChanged;
+        TaskService.OnTasksChanged -= OnTasksChanged;
+        ProjectService.OnProjectsChanged -= OnProjectsChanged;
+        DashboardInitializer.OnDashboardDataLoaded -= OnDashboardDataLoaded;
+        TaskInitializer.OnInitializationCompleted -= OnTaskInitializerCompleted;
+    }
+}

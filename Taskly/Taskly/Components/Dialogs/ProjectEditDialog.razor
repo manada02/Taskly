@@ -1,0 +1,356 @@
+﻿@* Potřebné namespace *@
+@using Taskly.Models
+@using System.ComponentModel.DataAnnotations
+
+<div>
+    <MudDialog Class="project-dialog-container">
+        <DialogContent>
+            @* Hlavička dialogu s ikonou a názvem projektu *@
+            <div class="project-dialog-header mb-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    @if (isNew)
+                    {
+                        @* Ikona pro nový projekt *@
+                            <MudIcon Icon="@Icons.Material.Filled.Folder" Size="Size.Large" Color="Color.Primary" />
+                    }
+                    else
+                    {
+                        @* Avatar s barvou projektu *@
+                            <MudAvatar Size="Size.Large" Style="@($"background-color: {project.Color ?? "#1976d2"}; color: white;")">
+                                <MudIcon Icon="@Icons.Material.Filled.Folder" />
+                            </MudAvatar>
+                    }
+
+                    @* Hlavní nadpisy a popis dialogu *@
+                    <div style="flex: 1; min-width: 0;">
+                        @if (isNew)
+                        {
+                                <MudText Typo="Typo.h5" Class="project-dialog-title">
+                                    Nový projekt
+                                </MudText>
+                        }
+                        else
+                        {
+                                <MudTooltip Text="@project.Name" Placement="Placement.Bottom"
+                                            Style="max-width: 400px; white-space: normal; word-break: break-word;">
+                                    <MudText Typo="Typo.h5" Class="project-dialog-title project-title-ellipsis">
+                                    @project.Name
+                                    </MudText>
+                                </MudTooltip>
+                        }
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="project-dialog-subtitle">
+                            @if (isNew)
+                            {
+                                @("Vytvořte nový projekt pro organizaci úkolů")
+                            }
+                            else
+                            {
+                                @("Upravte detaily projektu")
+                            }
+                        </MudText>
+                    </div>
+                </MudStack>
+            </div>
+
+            @* Formulář s údaji o projektu *@
+            <MudForm @ref="form" @bind-IsValid="@isValid">
+                <MudGrid>
+                    @* Pole pro název projektu *@
+                    <MudItem xs="12">
+                        <MudTextField Value="@project.Name"
+                                      ValueChanged="@((string val) => { project.Name = val; CheckForChanges(); })"
+                                      Label="Název projektu"
+                                      Required="true"
+                                      RequiredError="Název projektu je povinný"
+                                      MaxLength="100"
+                                      Counter="100"
+                                      Variant="Variant.Outlined"
+                                      Class="project-form-field"
+                                      spellcheck="false" />
+                    </MudItem>
+
+                    @* Pole pro popis projektu *@
+                    <MudItem xs="12">
+                        <MudTextField Value="@project.Description"
+                                      ValueChanged="@((string val) => { project.Description = val; CheckForChanges(); })"
+                                      Label="Popis projektu"
+                                      Lines="3"
+                                      MaxLength="500"
+                                      Counter="500"
+                                      Variant="Variant.Outlined"
+                                      Class="project-form-field project-description-textarea"
+                                      spellcheck="false" />
+                    </MudItem>
+
+                    @* Výběr barvy projektu *@
+                    <MudItem xs="12">
+                        <MudColorPicker @bind-Text="project.Color"
+                                        @bind-Text:after="CheckForChanges"
+                                        Label="Barva projektu"
+                                        Variant="Variant.Outlined"
+                                        Class="project-color-picker"
+                                        Placeholder="Vyberte barvu" />
+                    </MudItem>
+
+                    @* Výběr termínu dokončení projektu *@
+                    <MudItem xs="12">
+                        <MudDatePicker @bind-Date="dueDate"
+                                       @bind-Date:after="CheckForChanges"
+                                       Label="Termín projektu"
+                                       MinDate="@DateTime.Today"
+                                       PickerVariant="PickerVariant.Dialog"
+                                       DateFormat="dd.MM.yyyy"
+                                       Editable="true"
+                                       Placeholder="Vyberte datum dokončení projektu"
+                                       AutoClose="true"
+                                       Variant="Variant.Outlined"
+                                       Class="project-date-picker" />
+                    </MudItem>
+
+                    @* Sekce upozornění na termín projektu *@
+                    <MudItem xs="12">
+                        <div class="project-reminder-section">
+                            <MudText Typo="Typo.subtitle1" Class="reminder-section-title">
+                                <MudIcon Icon="@Icons.Material.Filled.Notifications" Class="mr-2" Size="Size.Small" />
+                                Upozornění na termín projektu
+                            </MudText>
+
+                            @if (!dueDate.HasValue)
+                            {
+                                @* Stav kdy není nastaven termín *@
+                                    <div class="reminder-disabled-state">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                                            <MudIcon Icon="@Icons.Material.Filled.NotificationsOff" Class="mr-1" Size="Size.Small" />
+                                            Pro upozornění je nutné nastavit termín projektu.
+                                        </MudText>
+                                    </div>
+                            }
+                            else
+                            {
+                                @* Výběr typu upozornění pomocí chipů *@
+                                    <MudChipSet T="string" SelectionMode="SelectionMode.MultiSelection" Class="mt-2 reminder-chips-container">
+                                        <MudChip Color="@(project.EnableDayReminder ? Color.Primary : Color.Default)"
+                                                 OnClick="@(() => { project.EnableDayReminder = !project.EnableDayReminder; CheckForChanges(); })"
+                                                 Variant="@(project.EnableDayReminder ? Variant.Filled : Variant.Outlined)"
+                                                 Icon="@Icons.Material.Filled.Today"
+                                                 Class="reminder-chip">
+                                            1 den
+                                        </MudChip>
+
+                                        <MudChip Color="@(project.EnableHourReminder ? Color.Secondary : Color.Default)"
+                                                 OnClick="@(() => { project.EnableHourReminder = !project.EnableHourReminder; CheckForChanges(); })"
+                                                 Variant="@(project.EnableHourReminder ? Variant.Filled : Variant.Outlined)"
+                                                 Icon="@Icons.Material.Filled.AccessTime"
+                                                 Class="reminder-chip">
+                                            2 hodiny
+                                        </MudChip>
+
+                                        <MudChip Color="@(project.EnableMinuteReminder ? Color.Tertiary : Color.Default)"
+                                                 OnClick="@(() => { project.EnableMinuteReminder = !project.EnableMinuteReminder; CheckForChanges(); })"
+                                                 Variant="@(project.EnableMinuteReminder ? Variant.Filled : Variant.Outlined)"
+                                                 Icon="@Icons.Material.Filled.Timer"
+                                                 Class="reminder-chip">
+                                            30 minut
+                                        </MudChip>
+                                    </MudChipSet>
+                            }
+                        </div>
+                    </MudItem>
+
+                    @* Stavové indikátory a upozornění *@
+                    @if (isOffline)
+                    {
+                            <MudItem xs="12">
+                                <MudAlert Severity="Severity.Warning" Variant="Variant.Filled" Class="mt-2 project-status-alert">
+                                    <MudIcon Icon="@Icons.Material.Filled.WifiOff" Class="mr-2" />
+                                    Pracujete v offline režimu. Projekt bude synchronizován po připojení k internetu.
+                                </MudAlert>
+                            </MudItem>
+                    }
+
+                    @if (hasChanges && !isNew)
+                    {
+                            <MudItem xs="12">
+                                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-2 project-status-alert">
+                                    <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-2" />
+                                    Provedli jste změny, které zatím nebyly uloženy.
+                                </MudAlert>
+                            </MudItem>
+                    }
+                </MudGrid>
+            </MudForm>
+        </DialogContent>
+
+        @* Akční tlačítka dialogu *@
+        <DialogActions>
+            <div class="project-dialog-actions">
+                <MudButton OnClick="Cancel"
+                           Variant="Variant.Text"
+                           Class="project-cancel-button">
+                    Zrušit
+                </MudButton>
+                <MudButton Color="Color.Primary"
+                           OnClick="Submit"
+                           Variant="Variant.Filled"
+                           Disabled="@(!isValid || (!isNew && !hasChanges))"
+                           Class="project-submit-button">
+                    @(isNew ? "Vytvořit" : "Uložit změny")
+                </MudButton>
+            </div>
+        </DialogActions>
+    </MudDialog>
+</div>
+
+@code {
+    // PARAMETRY A PROMĚNNÉ
+    // Kaskádový parametr pro dialog - MudBlazor ho automaticky nastaví
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+
+    // Vstupní parametry dialogu -  jsou předané při otevření
+    [Parameter] public ProjectItem Project { get; set; } = default!;
+    [Parameter] public bool IsNew { get; set; } = false;
+    [Parameter] public bool IsOffline { get; set; } = false;
+
+    // Pracovní proměnné pro formulář
+    private ProjectItem project = new();
+    private ProjectItem originalProject = new();
+    private MudForm form = null!;
+    private bool isValid;
+    private bool isNew;
+    private bool isOffline;
+    private bool hasChanges = false;
+
+    // Proměnná pro datum - odděleně od projektu, abychom mohli lépe pracovat s UI
+    private DateTime? dueDate;
+    private DateTime? originalDueDate;
+
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    // Inicializace dialogu - nastavení počátečních hodnot
+    protected override void OnInitialized()
+    {
+        // Vytvoříme kopii projektu, abychom nemodifikovali originál přímo
+        project = Project.Clone();
+        originalProject = Project.Clone();
+
+        // Nastavíme příznaky podle vstupních parametrů
+        isNew = IsNew;
+        isOffline = IsOffline;
+
+        // Pro nové záznamy vždy povolíme ukládání - nemá smysl detekovat změny
+        hasChanges = isNew;
+
+        // Inicializace datumu - převedeme z UTC na lokální čas pro UI
+        if (project.DueDate.HasValue)
+        {
+            dueDate = project.DueDate.Value.ToLocalTime().Date;
+            originalDueDate = dueDate; // Uložíme původní hodnotu pro detekci změn
+        }
+    }
+
+    // POMOCNÉ METODY
+    // Kontrola změn v projektu - aktivuje tlačítko uložit
+    private void CheckForChanges()
+    {
+        // Pro nové záznamy vždy povolíme ukládání
+        if (isNew)
+        {
+            hasChanges = true;
+            return;
+        }
+
+        // Kontrola změn v základních vlastnostech projektu
+        // Porovnáváme s původní hodnotou, abychom věděli, jestli se něco změnilo
+        hasChanges = project.Name != originalProject.Name ||
+                     (project.Description ?? string.Empty) != (originalProject.Description ?? string.Empty) ||
+                     (project.Color ?? string.Empty) != (originalProject.Color ?? string.Empty) ||
+                     project.EnableDayReminder != originalProject.EnableDayReminder ||
+                     project.EnableHourReminder != originalProject.EnableHourReminder ||
+                     project.EnableMinuteReminder != originalProject.EnableMinuteReminder;
+
+        // Kontrola změn v datumu - tohle je složitější, protože pracujeme s nullable DateTime
+        if (!hasChanges)
+        {
+            bool originalHasDate = originalProject.DueDate.HasValue;
+            bool currentHasDate = dueDate.HasValue;
+
+            // Kontrola, jestli se změnila existence datumu (byl/nebyl nastaven)
+            if (originalHasDate != currentHasDate)
+            {
+                hasChanges = true;
+            }
+            else if (originalHasDate && currentHasDate && dueDate.HasValue)
+            {
+                // Oba mají datum, kontrolujeme jestli se změnilo
+                if (!originalProject.DueDate.HasValue)
+                {
+                    return;
+                }
+
+                DateTime originalLocal = originalProject.DueDate.Value.ToLocalTime();
+
+                // Porovnání datumu (pouze datum, protože v projektu neukládáme čas)
+                if (originalLocal.Date != dueDate.Value.Date)
+                {
+                    hasChanges = true;
+                }
+            }
+        }
+
+        // Aktualizace UI - aby se změny projevily v UI
+        StateHasChanged();
+
+        // Pokud uživatel zruší datum, deaktivujeme všechna upozornění
+        // Nemá smysl mít upozornění bez termínu
+        if (!dueDate.HasValue)
+        {
+            project.EnableDayReminder = false;
+            project.EnableHourReminder = false;
+            project.EnableMinuteReminder = false;
+        }
+    }
+
+    // UI AKCE
+    // Zrušení dialogu - zavření bez uložení změn
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    // Uložení projektu - validace a odeslání dat
+    private async Task Submit()
+    {
+        // Nejprve ověříme platnost formuláře
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            // Nastavení termínu projektu
+            if (dueDate.HasValue)
+            {
+                // Nastavíme termín na konec dne (23:59:59) místo začátku (00:00:00)
+                // Toto je užitečné, protože uživatel obvykle myslí termín jako "do konce dne"
+                DateTime combinedDateTime = dueDate.Value.Date.AddDays(1).AddSeconds(-1);
+
+                // Nastavíme DateTime.Kind na Local, aby Blazor věděl, že jde o lokální čas
+                // Tohle je důležité pro správnou konverzi na UTC
+                combinedDateTime = DateTime.SpecifyKind(combinedDateTime, DateTimeKind.Local);
+
+                // Uložíme jako UTC, protože v modelu používáme UTC časy pro konzistenci
+                project.DueDate = combinedDateTime.ToUniversalTime();
+            }
+            else
+            {
+                // Pokud není termín, nastavíme null
+                project.DueDate = null;
+
+                // Pokud není termín, vypneme upozornění - nemůžeme upozorňovat na neexistující termín
+                project.EnableDayReminder = false;
+                project.EnableHourReminder = false;
+                project.EnableMinuteReminder = false;
+            }
+
+            // Zavřeme dialog a vrátíme upravený projekt
+            MudDialog.Close(DialogResult.Ok(project));
+        }
+    }
+}

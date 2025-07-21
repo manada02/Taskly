@@ -1,0 +1,238 @@
+/*PROFIL STRÁNKA SE STYLY */
+
+/*Hlavní kontejner stránky profilu uživatele */
+::deep .profile-page-container {
+    border-radius: 8px !important;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+/*HLAVIÈKA STRÁNKY */
+/*Stylování hlavièky s ikonou a nadpisy */
+.profile-header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Vìtší ikona v hlavièce */
+::deep .profile-header-main-icon {
+    font-size: 3rem !important;
+    width: 3rem !important;
+    height: 3rem !important;
+}
+
+/* Nadpis stránky profilu */
+::deep .profile-page-title {
+    font-weight: 600 !important;
+}
+
+/* Popis stránky profilu */
+::deep .profile-page-subtitle {
+    margin-top: 4px;
+}
+
+/* Akèní tlaèítka v hlavièce */
+.profile-header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Editaèní tlaèítko */
+::deep .profile-edit-button {
+    border-radius: 6px !important;
+}
+
+/*AVATAR SEKCE */
+/*Kontejner pro avatar */
+::deep .profile-avatar-container {
+    border-radius: 8px !important;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+/* Avatar uživatele s relativní pozicí pro overlay */
+::deep .profile-user-avatar {
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.2s ease-in-out;
+}
+
+::deep .profile-user-avatar:hover {
+    transform: scale(1.02);
+}
+
+/* Výchozí avatar ikona */
+::deep .profile-default-avatar {
+    color: var(--mud-palette-text-secondary) !important;
+}
+
+/* Naètení overlay pøes avatara */
+.profile-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 50%;
+    z-index: 10;
+}
+
+/* Overlay pro editaci avataru */
+.profile-avatar-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+    border-bottom-left-radius: 50%;
+    border-bottom-right-radius: 50%;
+}
+
+/* Hover efekt pro zobrazení overlay */
+::deep .profile-user-avatar:hover .profile-avatar-overlay {
+    opacity: 1;
+}
+
+/*DATA SEKCE */
+/*Kontejner pro uživatelská data */
+::deep .profile-data-container {
+    border-radius: 8px !important;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+/* Nadpisy sekcí */
+::deep .profile-section-title {
+    font-weight: 600 !important;
+    display: flex;
+    align-items: center;
+}
+
+/* Formuláøová pole */
+::deep .profile-form-field .mud-input-outlined .mud-input-outlined-border {
+    border-radius: 6px !important;
+}
+
+/* Tlaèítko pro uložení */
+::deep .profile-save-button {
+    border-radius: 8px !important;
+    font-weight: 600;
+}
+
+/* Seznam s daty uživatele */
+::deep .profile-data-list {
+    background: transparent !important;
+}
+
+/* Položky v seznamu */
+::deep .profile-list-item {
+    border-radius: 6px !important;
+    margin-bottom: 8px;
+}
+
+::deep .profile-list-item:hover {
+    background: var(--mud-palette-background-grey) !important;
+}
+
+/* Popisky polí */
+::deep .profile-field-label {
+    font-weight: 500 !important;
+    margin-bottom: 2px;
+}
+
+/* Hodnoty polí */
+::deep .profile-field-value {
+    font-size: 1rem;
+    color: var(--mud-palette-text-primary);
+}
+
+/*BEZPEÈNOSTNÍ SEKCE */
+/*Kontejner pro zabezpeèení */
+::deep .profile-security-container {
+    border-radius: 8px !important;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+/* Bezpeènostní tlaèítka */
+::deep .profile-security-button {
+    border-radius: 8px !important;
+    font-weight: 600;
+    min-height: 48px;
+    transition: transform 0.2s ease-in-out;
+}
+
+::deep .profile-security-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+/*RESPONZIVNÍ DESIGN PRO MOBILY */
+/*Pøizpùsobení pro tablety a menší displeje */
+@media (max-width: 768px) {
+
+    .profile-header-actions {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    ::deep .profile-page-title {
+        font-size: 1.5rem !important;
+    }
+
+    ::deep .profile-page-subtitle {
+        font-size: 0.875rem !important;
+    }
+
+    ::deep .profile-avatar-container,
+    ::deep .profile-data-container,
+    ::deep .profile-security-container {
+        padding: 16px !important;
+    }
+
+    ::deep .profile-user-avatar {
+        width: 140px !important;
+        height: 140px !important;
+    }
+}
+
+/* Responzivní design pro velmi malé displeje */
+@media (max-width: 480px) {
+    ::deep .profile-page-title {
+        font-size: 1.25rem !important;
+    }
+
+    /* Avatar dostateènì velký i na malých mobilech */
+    ::deep .profile-user-avatar {
+        width: 120px !important;
+        height: 120px !important;
+    }
+
+    ::deep .profile-security-button {
+        min-height: 44px;
+        font-size: 0.875rem;
+    }
+}
+
+/*CSS ANIMACE */
+/*Plynulé pøechody pro interaktivní prvky */
+::deep .profile-edit-button,
+::deep .profile-save-button {
+    transition: all 0.2s ease-in-out;
+}
+
+::deep .profile-edit-button:hover,
+::deep .profile-save-button:hover {
+    transform: scale(1.05);
+}

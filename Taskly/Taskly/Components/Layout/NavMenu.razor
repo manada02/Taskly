@@ -1,0 +1,85 @@
+﻿@* Služby pro DI *@
+@inject NavigationManager NavigationManager
+
+<div>
+    <MudNavMenu Class="task-management-nav-menu">
+        <MudNavLink Href="/" Match="NavLinkMatch.All" Class="task-management-nav-link">
+            <MudIcon Icon="@Icons.Material.Filled.Home" Class="mr-3" />
+            Domů
+        </MudNavLink>
+
+        @* Sekce úkolů *@
+        <MudNavGroup Title="Úkoly" Expanded="true" Class="task-management-nav-group">
+            <MudNavLink Href="/tasks" Class="task-management-nav-link">
+                <MudIcon Icon="@Icons.Material.Filled.TaskAlt" Class="mr-3" />
+                Všechny úkoly
+            </MudNavLink>
+            <MudNavLink OnClick="@OpenNewTaskDialog" Class="task-management-nav-link">
+                <MudIcon Icon="@Icons.Material.Filled.Add" Class="mr-3" />
+                Nový úkol
+            </MudNavLink>
+            <MudNavLink Href="/completed-tasks" Class="task-management-nav-link">
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="mr-3" />
+                Dokončené úkoly
+            </MudNavLink>
+        </MudNavGroup>
+
+        @* Sekce projektů *@
+        <MudNavGroup Title="Projekty" Expanded="true" Class="project-management-nav-group">
+            <MudNavLink Href="/projects" Class="project-management-nav-link">
+                <MudIcon Icon="@Icons.Material.Filled.Folder" Class="mr-3" />
+                Všechny projekty
+            </MudNavLink>
+            <MudNavLink OnClick="@OpenNewProjectDialog" Class="project-management-nav-link">
+                <MudIcon Icon="@Icons.Material.Filled.CreateNewFolder" Class="mr-3" />
+                Nový projekt
+            </MudNavLink>
+        </MudNavGroup>
+
+        <MudNavLink Href="/statistics" Class="task-management-nav-link">
+            <MudIcon Icon="@Icons.Material.Filled.BarChart" Class="mr-3" />
+            Statistiky
+        </MudNavLink>
+
+        <MudNavLink Href="/settings" Class="task-management-nav-link">
+            <MudIcon Icon="@Icons.Material.Filled.Settings" Class="mr-3" />
+            Nastavení
+        </MudNavLink>
+
+
+    </MudNavMenu>
+</div>
+
+@code {
+    // Metoda pro rychlé vytvoření nového úkolu z menu
+    // Používáme kombinaci navigace a query parametrů pro otevření dialogu
+    private void OpenNewTaskDialog()
+    {
+        // Nejprve se ujistíme, že jsme na správné stránce
+        // Navigujeme na stránku úkolů, pokud na ní ještě nejsme
+        if (!NavigationManager.Uri.Contains("/tasks"))
+        {
+            NavigationManager.NavigateTo("/tasks");
+        }
+
+        // Otevřeme dialog pomocí query parametru - stránka úkolů se stará o zpracování
+        // Používáme forceLoad: false, abychom nevynutili obnovení celé stránky
+        NavigationManager.NavigateTo("/tasks?action=new", forceLoad: false);
+    }
+
+    // Metoda pro rychlé vytvoření nového projektu z menu
+    // Funguje na stejném principu jako vytvoření úkolu
+    private void OpenNewProjectDialog()
+    {
+        // Nejprve se ujistíme, že jsme na správné stránce
+        // Navigujeme na stránku projektů, pokud na ní ještě nejsme
+        if (!NavigationManager.Uri.Contains("/projects"))
+        {
+            NavigationManager.NavigateTo("/projects");
+        }
+
+        // Otevřeme dialog pro vytvoření projektu pomocí query parametru
+        // Stránka projektů detekuje parametr a otevře příslušný dialog
+        NavigationManager.NavigateTo("/projects?action=new", forceLoad: false);
+    }
+}

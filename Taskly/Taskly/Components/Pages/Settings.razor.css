@@ -1,0 +1,149 @@
+/*STRÁNKA NASTAVENÍ - STYLY */
+
+/*Hlavní kontejner stránky pro správu nastavení */
+::deep .settings-page-container {
+    border-radius: 8px !important;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+/*HLAVIÈKA STRÁNKY */
+/*Stylování hlavièky s ikonou a nadpisy */
+.settings-header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Nadpis stránky nastavení */
+::deep .settings-page-title {
+    font-weight: 600 !important;
+}
+
+/* Popis stránky nastavení */
+::deep .settings-page-subtitle {
+    margin-top: 4px;
+}
+
+/* Akèní tlaèítka v hlavièce */
+.settings-header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/*KARTY NASTAVENÍ */
+/*Základní styly pro všechny karty nastavení */
+::deep .settings-appearance-card,
+::deep .settings-theme-card,
+::deep .settings-density-card,
+::deep .settings-sync-card,
+::deep .settings-notifications-card,
+::deep .settings-default-filter-card,
+::deep .settings-advanced-card,
+::deep .settings-about-card {
+    border-radius: 8px !important;
+    border: 1px solid var(--mud-palette-lines-default);
+    background: var(--mud-palette-surface);
+}
+
+/* Nadpisy karet */
+::deep .settings-card-title {
+    font-weight: 600 !important;
+}
+
+/*FORMULÁØOVÉ PRVKY */
+/*Styly pro select komponenty */
+::deep .settings-color-select .mud-input-outlined .mud-input-outlined-border,
+::deep .settings-density-select .mud-input-outlined .mud-input-outlined-border,
+::deep .settings-default-view-select .mud-input-outlined .mud-input-outlined-border {
+    border-radius: 6px !important;
+}
+
+/*TLAÈÍTKA */
+/*Styly pro tlaèítka uložení nastavení */
+::deep .settings-save-appearance-button,
+::deep .settings-save-app-button {
+    border-radius: 8px !important;
+    font-weight: 600;
+}
+
+/* Tlaèítko synchronizace */
+::deep .settings-sync-now-button {
+    border-radius: 6px !important;
+}
+
+/* Nebezpeèné tlaèítko pro mazání dat */
+::deep .settings-clear-data-button {
+    border-radius: 6px !important;
+}
+
+/*SPECIÁLNÍ SEKCE */
+/* Logo aplikace */
+.settings-app-logo {
+    border-radius: 8px;
+}
+
+/* Název aplikace */
+::deep .settings-app-name {
+    font-weight: 600 !important;
+}
+
+/* Technické specifikace */
+.settings-tech-specs {
+    background: var(--mud-palette-background-grey);
+    border-radius: 8px;
+    padding: 16px;
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+/* Copyright informace */
+::deep .settings-copyright {
+    opacity: 0.7;
+}
+
+/*RESPONZIVNÍ DESIGN PRO MOBILY */
+/*Pøizpùsobení pro tablety a menší displeje */
+@media (max-width: 768px) {
+    .settings-header-actions {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    ::deep .settings-page-title {
+        font-size: 1.5rem !important;
+    }
+
+    /* Úprava tlaèítek na mobilech */
+    ::deep .settings-save-appearance-button,
+    ::deep .settings-save-app-button {
+        width: 100% !important;
+    }
+
+    /* Logo aplikace menší na mobilech */
+    .settings-app-logo {
+        width: 60px !important;
+        height: 60px !important;
+    }
+}
+
+/* Responzivní design pro velmi malé displeje */
+@media (max-width: 480px) {
+    ::deep .settings-page-title {
+        font-size: 1.25rem !important;
+    }
+}
+
+/* MudSwitch na mobilních obrazovkách */
+@media (max-width: 600px) {
+    ::deep .settings-switch .mud-switch-thumb {
+        top: 5px;
+        transform: none;
+    }
+
+    ::deep .settings-switch .mud-switch-track {
+        height: 14px;
+        margin-top: 3px;
+        margin-bottom: 3px;
+    }
+}

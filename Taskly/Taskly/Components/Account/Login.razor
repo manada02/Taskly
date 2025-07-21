@@ -1,0 +1,231 @@
+﻿@page "/login"
+
+@* Potřebné namespace *@
+@using System.ComponentModel.DataAnnotations
+@using Firebase.Auth
+@using Firebase.Auth.Providers
+@using Taskly.Models
+@using Taskly.Services.Auth
+@using Taskly.Firebase_config
+@using Microsoft.Maui.Storage
+
+@* Služby pro DI *@
+@inject NavigationManager NavigationManager
+@inject IAuthService FirebaseAuthService
+@inject TasklyFirebaseConfig FirebaseConfig
+@inject FirebaseAuthClient authClient
+@inject INotificationService NotificationService
+@inject ConnectivityService ConnectivityService
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+    <MudCard Elevation="4" Class="pa-4">
+        <MudCardHeader>
+            <MudText Typo="Typo.h4" Align="Align.Center">Přihlášení</MudText>
+        </MudCardHeader>
+        <MudCardContent>
+            <EditForm Model="@loginModel" OnValidSubmit="HandleLogin">
+                <DataAnnotationsValidator />
+
+                @* Pole pro email/jméno *@
+                <MudTextField T="string"
+                              @bind-Value="loginModel.LoginIdentifier"
+                              For="@(() => loginModel.LoginIdentifier)"
+                              Label="Email nebo Uživatelské jméno"
+                              Required="true"
+                              RequiredError="Email nebo Uživatelské jméno je povinné"
+                              Disabled="@isProcessing"
+                              Class="mb-4" />
+
+                @* Pole pro heslo *@
+                <MudTextField T="string"
+                              @bind-Value="loginModel.Password"
+                              For="@(() => loginModel.Password)"
+                              Label="Heslo"
+                              Required="true"
+                              RequiredError="Heslo je povinné"
+                              InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                              Disabled="@isProcessing"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)"
+                              OnAdornmentClick="() => _showPassword = !_showPassword"
+                              Class="mb-2" />
+
+                @* Zapomenuté heslo *@
+                <MudText Align="Align.Right" Class="mb-4">
+                    <MudLink Href="/forgot-password" Disabled="@isProcessing">Zapomněli jste heslo?</MudLink>
+                </MudText>
+
+                @* Přihlašovací tlačítko *@
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Large"
+                           FullWidth="true"
+                           ButtonType="ButtonType.Submit"
+                           Disabled="@isProcessing"
+                           Class="mb-2">
+                    @if (isProcessing)
+                    {
+                        <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                        <MudText Class="ms-2">Přihlašování...</MudText>
+                    }
+                    else
+                    {
+                        @("Přihlásit se")
+                    }
+                </MudButton>
+
+                @* Odkaz na registraci *@
+                <MudText Align="Align.Center">
+                    Nemáte účet?
+                    <MudLink Href="/register" Disabled="@isProcessing">Zaregistrujte se</MudLink>
+                </MudText>
+            </EditForm>
+        </MudCardContent>
+    </MudCard>
+</MudContainer>
+
+@code {
+    // Model a stavové proměnné
+    // Model pro držení přihlašovacích údajů
+    private UserLoginDto loginModel = new();
+    private bool isProcessing = false;
+    private bool _showPassword = false;
+
+    // Inicializace komponenty - zajištění aktualizace UI
+    protected override void OnInitialized()
+    {
+        StateHasChanged();
+    }
+
+    // Zpracování přihlášení
+    private async Task HandleLogin()
+    {
+        // Kontrola internetu
+        if (!ConnectivityService.IsConnected)
+        {
+            NotificationService.ShowToast("Pro úspěšné přihlášení je nutné internetové připojení", NotificationType.Warning);
+            return;
+        }
+
+        // Kontrola vyplnění polí
+        if (string.IsNullOrWhiteSpace(loginModel.LoginIdentifier) || string.IsNullOrWhiteSpace(loginModel.Password))
+        {
+            NotificationService.ShowToast("Vyplňte prosím všechna povinná pole", NotificationType.Warning);
+            return;
+        }
+
+        if (isProcessing) return;
+        try
+        {
+            isProcessing = true;
+
+            // Info o průběhu
+            NotificationService.ShowPersistentToast("Probíhá přihlašování...", NotificationType.Info);
+
+            // Kontrola auth klienta
+            if (authClient == null)
+            {
+                NotificationService.RemovePersistentToast();
+                NotificationService.ShowToast("Došlo k chybě: autentizační služba nebyla inicializována", NotificationType.Error);
+                return;
+            }
+
+            // Zjištění emailu uživatele
+            string loginEmail;
+            if (loginModel.LoginIdentifier.Contains("@"))
+            {
+                loginEmail = loginModel.LoginIdentifier;
+            }
+            else
+            {
+                try
+                {
+                    loginEmail = await FirebaseAuthService.GetEmailByUsernameAsync(loginModel.LoginIdentifier);
+                }
+                catch (ApplicationException)
+                {
+                    NotificationService.RemovePersistentToast();
+                    NotificationService.ShowToast("Uživatel nebyl nalezen. Zkontrolujte prosím zadané přihlašovací údaje.", NotificationType.Error);
+                    return;
+                }
+            }
+
+            // Firebase přihlášení
+            var userCredential = await authClient.SignInWithEmailAndPasswordAsync(
+                loginEmail,
+                loginModel.Password
+            );
+
+            // Po přihlášení získám ID a refresh token, které uložím do úložiště
+            string idToken = await userCredential.User.GetIdTokenAsync(true)
+                ?? throw new InvalidOperationException("Nepodařilo se získat ID token");
+
+            string refreshToken = userCredential.User.Credential.RefreshToken
+                ?? throw new InvalidOperationException("Nepodařilo se získat refresh token");
+
+            // Uložení tokenů
+            await SecureStorage.SetAsync("firebase_token", idToken);
+            await SecureStorage.SetAsync("refresh_token", refreshToken);
+            await SecureStorage.SetAsync("user_logged_in", "true");
+
+            // Nastavení online módu
+            SecureStorage.Remove("is_offline_authenticated");
+            await SecureStorage.SetAsync("is_offline_mode", "false");
+
+            // Přihlášení uživatele
+            var user = await FirebaseAuthService.LoginAsync(idToken);
+
+            // Refresh timer
+            FirebaseAuthService.StartTokenRefreshTimer();
+
+            NotificationService.RemovePersistentToast();
+
+            // Notifikace o úspěchu
+            await NotificationService.AddNotificationAsync(new NotificationItem
+                {
+                    Message = "Přihlášení proběhlo úspěšně",
+                    Type = NotificationType.Success,
+                    Timestamp = DateTime.UtcNow,
+                    Category = NotificationCategory.System,
+                    Title = "Přihlášení"
+                }, showAfterForceLoad: true);
+
+            // Přesměrování
+            NavigationManager.NavigateTo("/", forceLoad: false);
+        }
+        catch (Firebase.Auth.FirebaseAuthException firebaseEx)
+        {
+            NotificationService.RemovePersistentToast();
+
+            // Různé Firebase chyby
+            string errorMessage;
+
+            if (firebaseEx.Message.Contains("INVALID_LOGIN_CREDENTIALS"))
+            {
+                errorMessage = "Zadané přihlašovací údaje nejsou platné";
+            }
+            else if (firebaseEx.Reason == AuthErrorReason.UserDisabled)
+            {
+                errorMessage = "Váš účet je deaktivován. Pro obnovení se obraťte na administrátora na admin@taskly.com.";
+            }
+            else
+            {
+                errorMessage = "Chyba při přihlášení";
+            }
+
+            NotificationService.ShowToast(errorMessage, NotificationType.Error);
+        }
+        catch (Exception)
+        {
+            NotificationService.RemovePersistentToast();
+
+            // Obecná chyba
+            NotificationService.ShowToast("Při pokusu o přihlášení došlo k neočekávané chybě. Zkuste akci zopakovat později", NotificationType.Error);
+            loginModel = new();
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+}

@@ -1,0 +1,819 @@
+﻿@* Namespace a importy *@
+@page "/profile"
+@using MudBlazor
+@using Taskly.Models
+@using Taskly.Services.Auth
+@using Google.Cloud.Firestore
+@using Microsoft.AspNetCore.Components.Forms  @* na začátek souboru pro použití <InputFile>. *@
+@using Taskly.Components.Dialogs
+@using Taskly.LocalStorage
+@using System.Text
+@using Taskly.Services.Media
+@using Taskly.Services.Notification
+
+@* Služby pro DI *@
+@inject ILogger<Profile> Logger
+@inject IDialogService DialogService  
+@inject ICacheService CacheService
+@inject INotificationService NotificationService
+@inject ConnectivityService ConnectivityService
+@inject NavigationManager Navigation
+@inject LiteDbConfig LiteDbConfig
+@inject IDialogService DialogService
+@inject IAuthService FirebaseAuthService
+@inject ISnackbar Snackbar
+
+<div>
+    @* Hlavní kontejner stránky profilu uživatele *@
+    <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-4">
+        <MudPaper Elevation="2" Class="pa-6 profile-page-container">
+
+            @* Hlavička stránky s ikonou, nadpisy a akčními prvky *@
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mb-4">
+                        @* Ikona stránky profilu *@
+                        <div class="profile-header-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Size="Size.Large" Color="Color.Primary" Class="profile-header-main-icon" />
+                        </div>
+
+                        @* Hlavní nadpisy a popis stránky *@
+                        <div>
+                            <MudText Typo="Typo.h4" Class="profile-page-title">Profil uživatele</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="profile-page-subtitle">
+                                Spravujte svůj účet a osobní údaje
+                            </MudText>
+                        </div>
+                        <MudSpacer />
+
+                        @* Tlačítko pro přepnutí režimu editace *@
+                        <div class="profile-header-actions">
+                            <MudTooltip Text="@(IsEditing ? "Zrušit editaci" : "Upravit profil")">
+                                <MudIconButton Icon="@(IsEditing ? Icons.Material.Filled.Close : Icons.Material.Filled.Edit)"
+                                               Color="Color.Primary"
+                                               OnClick="@(() => IsEditing = !IsEditing)"
+                                               Class="profile-edit-button" />
+                            </MudTooltip>
+                        </div>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+
+            @* Sekce s avatarem uživatele *@
+            <MudPaper Elevation="1" Class="profile-avatar-container pa-4 mb-4">
+                <MudGrid>
+                    <MudItem xs="12" Class="d-flex justify-center">
+                        @* Avatar s možností změny obrázku *@
+                        <MudTooltip Text="@(IsEditing ? "Klikněte pro změnu obrázku" : "Pro nahrání obrázku přejděte k editaci")">
+                            <MudAvatar Size="Size.Large"
+                                       Color="Color.Primary"
+                                       Style="@GetAvatarStyle()"
+                                       Class="profile-user-avatar"
+                                       @onclick="HandleAvatarClick">
+
+                                @if (!string.IsNullOrWhiteSpace(currentImageUrl))
+                                {
+                                    <MudImage Src="@currentImageUrl"
+                                              Alt="Profile"
+                                              Elevation="0"
+                                              Fluid="true"
+                                              ObjectFit="ObjectFit.Cover"
+                                              @onerror="HandleImageError" />
+                                }
+                                else if (currentUser?.Username?.Length > 0)
+                                {
+                                    @(currentUser.Username[0].ToString().ToUpper())
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.AccountCircle"
+                                             Size="Size.Large"
+                                             Class="profile-default-avatar" />
+                                }
+
+                                @* Indikátor načítání *@
+                                @if (isLoading || isUploading)
+                                {
+                                    <div class="profile-loading-overlay">
+                                        <MudProgressCircular Color="Color.Secondary" Size="Size.Large" Indeterminate="true" />
+                                    </div>
+                                }
+
+                                @* Overlay pro editaci *@
+                                @if (IsEditing)
+                                {
+                                    <div class="profile-avatar-overlay">
+                                        <MudIcon Icon="@Icons.Material.Filled.PhotoCamera"
+                                                 Size="Size.Medium"
+                                                 Color="Color.Surface" />
+                                    </div>
+                                }
+                            </MudAvatar>
+                        </MudTooltip>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            @* Sekce s údaji uživatele *@
+            <MudPaper Elevation="1" Class="profile-data-container pa-4 mb-4">
+                @if (IsEditing)
+                {
+                    @* Editovací formulář *@
+                    <MudText Typo="Typo.h6" Class="mb-3 profile-section-title">
+                        <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="mr-1" />
+                        Upravit údaje
+                    </MudText>
+
+                    <MudGrid Spacing="3">
+                        @* Pole pro uživatelské jméno *@
+                        <MudItem xs="12" sm="6">
+                            <MudTextField T="string"
+                                          @bind-Value="UserName"
+                                          Label="Uživatelské jméno"
+                                          Variant="Variant.Outlined"
+                                          Class="profile-form-field" />
+                        </MudItem>
+
+                        @* Pole pro email *@
+                        <MudItem xs="12" sm="6">
+                            <MudTextField T="string"
+                                          @bind-Value="Email"
+                                          Label="Email"
+                                          Variant="Variant.Outlined"
+                                          Class="profile-form-field" />
+                        </MudItem>
+
+                        @* Pole pro jméno *@
+                        <MudItem xs="12" sm="6">
+                            <MudTextField T="string"
+                                          @bind-Value="FirstName"
+                                          Label="Jméno"
+                                          Variant="Variant.Outlined"
+                                          Class="profile-form-field" />
+                        </MudItem>
+
+                        @* Pole pro příjmení *@
+                        <MudItem xs="12" sm="6">
+                            <MudTextField T="string"
+                                          @bind-Value="LastName"
+                                          Label="Příjmení"
+                                          Variant="Variant.Outlined"
+                                          Class="profile-form-field" />
+                        </MudItem>
+
+                        @* Tlačítko pro uložení změn *@
+                        <MudItem xs="12" Class="d-flex justify-end">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Save"
+                                       OnClick="HandleSubmit"
+                                       Class="profile-save-button">
+                                Uložit změny
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                }
+                else
+                {
+                    @* Zobrazení údajů v readonly režimu *@
+                    <MudText Typo="Typo.h6" Class="mb-3 profile-section-title">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Class="mr-1" />
+                        Osobní údaje
+                    </MudText>
+
+                    <MudList T="string" Disabled="false" Class="profile-data-list">
+                        @* Uživatelské jméno *@
+                        <MudListItem T="string" Icon="@Icons.Material.Filled.Person" Class="profile-list-item">
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.caption" Color="Color.Primary" Class="profile-field-label">Uživatelské jméno</MudText>
+                                <MudText Class="profile-field-value">@UserName</MudText>
+                            </MudStack>
+                        </MudListItem>
+
+                        @* Jméno a příjmení *@
+                        <MudListItem T="string" Icon="@Icons.Material.Filled.Badge" Class="profile-list-item">
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.caption" Color="Color.Primary" Class="profile-field-label">Jméno a příjmení</MudText>
+                                <MudText Class="profile-field-value">@($"{FirstName} {LastName}")</MudText>
+                            </MudStack>
+                        </MudListItem>
+
+                        @* Email *@
+                        <MudListItem T="string" Icon="@Icons.Material.Filled.Email" Class="profile-list-item">
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.caption" Color="Color.Primary" Class="profile-field-label">Email</MudText>
+                                <MudText Class="profile-field-value">@Email</MudText>
+                            </MudStack>
+                        </MudListItem>
+                    </MudList>
+                }
+            </MudPaper>
+
+            @* Sekce správy a zabezpečení účtu *@
+            <MudPaper Elevation="1" Class="profile-security-container pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3 profile-section-title">
+                    <MudIcon Icon="@Icons.Material.Filled.Security" Size="Size.Small" Class="mr-1" />
+                    Správa a zabezpečení
+                </MudText>
+
+                @* Akční tlačítka pro správu účtu *@
+                <MudGrid Spacing="3" Justify="Justify.Center">
+
+                    @* Tlačítko pro změnu hesla *@
+                    <MudItem xs="12" sm="6">
+                        <MudStack AlignItems="AlignItems.Center">
+                            <MudButton Variant="Variant.Outlined"
+                                       Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Lock"
+                                       Size="Size.Large"
+                                       Disabled="@(!ConnectivityService.IsConnected)"
+                                       OnClick="OpenChangePasswordDialog"
+                                       Class="profile-security-button"
+                                       FullWidth="true">
+                                Změnit heslo
+                            </MudButton>
+                        </MudStack>
+                    </MudItem>
+
+                    @* Tlačítko pro deaktivaci účtu *@
+                    <MudItem xs="12" sm="6">
+                        <MudStack AlignItems="AlignItems.Center">
+                            <MudButton Variant="Variant.Filled"
+                                       Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.PersonOff"
+                                       Size="Size.Large"
+                                       Disabled="@(!ConnectivityService.IsConnected)"
+                                       OnClick="OpenDeactivateAccountDialog"
+                                       Class="profile-security-button"
+                                       FullWidth="true">
+                                Deaktivovat účet
+                            </MudButton>
+                        </MudStack>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </MudPaper>
+    </MudContainer>
+</div>
+
+@code {
+    // PROMĚNNÉ A VLASTNOSTI
+    // Parametry komponenty pro data uživatele
+    [Parameter] public string UserName { get; set; } = string.Empty;
+    [Parameter] public string FirstName { get; set; } = string.Empty;
+    [Parameter] public string LastName { get; set; } = string.Empty;
+    [Parameter] public string Email { get; set; } = string.Empty;
+    [Parameter] public string? ProfileImageUrl { get; set; } = null;
+    [Parameter] public EventCallback<UserProfileDto> OnProfileUpdate { get; set; }
+
+    // Stavové proměnné pro řízení UI
+    private bool IsEditing { get; set; }
+    private bool isUploading = false;
+    private bool isLoading = true;
+    private string? currentImageUrl { get; set; }
+    private AppUser? currentUser;
+
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    // Inicializace komponenty - načtení dat uživatele
+    protected override async Task OnInitializedAsync()
+    {
+        // Načítáme data jen když jsou potřeba
+        await LoadUserProfile();
+    }
+
+    // NAČÍTÁNÍ DAT
+    // Načtení uživatelského profilu z cache nebo služby
+    private async Task LoadUserProfile()
+    {
+        isLoading = true;
+
+        // Resetujeme currentUser před načtením nových dat
+        this.currentUser = null;
+
+        try
+        {
+            Logger.LogInformation("Profile: Pokus o načtení currentUser z cache.");
+
+            // Použijeme GetOrCreateAsync pro načtení z cache nebo služby
+            this.currentUser = await CacheService.GetOrCreateAsync<AppUser?>(
+                "currentUser",
+                async () => // Async lambda
+                {
+                    if (!ConnectivityService.IsConnected)
+                    {
+                        Logger.LogWarning("Profile: Offline a data nejsou v cache. Nelze načíst z FirebaseAuthService.");
+                        return null; // Vrátíme null, pokud jsme offline a nemáme cache
+                    }
+                    Logger.LogInformation("Profile: Data currentUser nenalezena v cache, načítáme z FirebaseAuthService.");
+                    return await FirebaseAuthService.GetCurrentUserAsync(); // Načtení z DB
+                },
+                TimeSpan.FromHours(24));
+
+            // Pracujeme s načteným uživatele
+            if (this.currentUser != null)
+            {
+                Logger.LogInformation($"Profile: Úspěšně načten profil uživatele: {this.currentUser.Email}");
+
+                // Nastavíme hodnoty polí profilu
+                UserName = this.currentUser.Username ?? string.Empty;
+                FirstName = this.currentUser.FirstName ?? "";
+                LastName = this.currentUser.LastName ?? "";
+                Email = this.currentUser.Email ?? string.Empty;
+
+                // Jednodušší logika pro obrázek
+                bool hasValidUrl = !string.IsNullOrWhiteSpace(this.currentUser.ProfileImageUrl) &&
+                                   Uri.IsWellFormedUriString(this.currentUser.ProfileImageUrl, UriKind.Absolute);
+
+                // Nastavíme currentImageUrl VŽDY, pokud má uživatel platné URL
+                // Necháme na prohlížeči/onerror, aby řešil zobrazení/chybu
+                string? newImageUrl = hasValidUrl ? this.currentUser.ProfileImageUrl : null;
+
+                // Logování pro sledování
+                Logger.LogInformation($"Profile: Načteno URL z uživatele: {newImageUrl ?? "null"}. Aktuální currentImageUrl: {currentImageUrl ?? "null"}");
+
+                // Aktualizujeme currentImageUrl POUZE pokud se liší od předchozího,
+                // nebo pokud byl předtím null a teď má být nastaven.
+                // Tím zabráníme zbytečnému překreslování, pokud URL zůstává stejné.
+                if (currentImageUrl != newImageUrl)
+                {
+                    currentImageUrl = newImageUrl;
+                    Logger.LogInformation($"Profile: Aktualizujeme currentImageUrl na: {currentImageUrl ?? "null"}");
+                }
+                else
+                {
+                    Logger.LogInformation($"Profile: currentImageUrl ({currentImageUrl ?? "null"}) se nemění.");
+                }
+            }
+            else
+            {
+                // Pokud se nepodařilo načíst uživatele
+                Logger.LogWarning("Profile: Nepodařilo se načíst data uživatele (this.currentUser je null).");
+                UserName = string.Empty;
+                FirstName = string.Empty;
+                LastName = string.Empty;
+                Email = string.Empty;
+
+                // Pokud nebyl načten uživatel, obrázek by měl zmizet
+                if (currentImageUrl != null)
+                {
+                    currentImageUrl = null;
+                    Logger.LogInformation($"Profile: Resetujeme currentImageUrl na null, protože currentUser je null.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Profile: Chyba při načítání uživatelského profilu.");
+            NotificationService.ShowToast($"Chyba při načítání profilu.", NotificationType.Error);
+
+            // Resetujeme všechny údaje při chybě
+            this.currentUser = null;
+            UserName = string.Empty;
+            FirstName = string.Empty;
+            LastName = string.Empty;
+            Email = string.Empty;
+
+            // Resetujeme obrázek i při chybě
+            if (currentImageUrl != null)
+            {
+                currentImageUrl = null;
+                Logger.LogInformation($"Profile: Resetujeme currentImageUrl na null kvůli chybě.");
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged(); 
+        }
+    }
+
+    // UI AKCE
+    // Zpracování odeslání formuláře pro aktualizaci profilu
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            // Zobrazíme perzistentní notifikaci o probíhající aktualizaci
+            NotificationService.ShowPersistentToast("Aktualizujeme profil...", NotificationType.Info);
+
+            // Načteme aktuální data pro porovnání
+            var currentProfile = await FirebaseAuthService.GetCurrentUserAsync();
+            if (currentProfile == null)
+            {
+                NotificationService.RemovePersistentToast();
+                NotificationService.ShowToast("Nelze načíst aktuální profil.", NotificationType.Error);
+                return;
+            }
+
+            // Kontrolujeme, zda se něco skutečně změnilo
+            bool hasChanges =
+                UserName != currentProfile.Username ||
+                FirstName != currentProfile.FirstName ||
+                LastName != currentProfile.LastName ||
+                Email != currentProfile.Email ||
+                currentImageUrl != currentProfile.ProfileImageUrl;
+
+            // Kontrola změn kritických údajů vyžadujících obnovu session
+            bool needsSessionRestore =
+                UserName != currentProfile.Username ||
+                Email != currentProfile.Email;
+
+            // Pokud se nic nezměnilo, jen ukončíme editaci
+            if (!hasChanges)
+            {
+                NotificationService.RemovePersistentToast();
+                IsEditing = false;
+                return;
+            }
+
+            // Vytvoříme model s garantovanými non-null hodnotami
+            var updateModel = new UserProfileDto
+                {
+                    UserName = UserName ?? currentProfile.Username ?? string.Empty,
+                    FirstName = FirstName ?? currentProfile.FirstName ?? string.Empty,
+                    LastName = LastName ?? currentProfile.LastName ?? string.Empty,
+                    Email = Email ?? currentProfile.Email ?? string.Empty,
+                    ProfileImageUrl = currentImageUrl ?? currentProfile.ProfileImageUrl ?? string.Empty
+                };
+
+            // Voláme službu pro aktualizaci profilu v databázi
+            var success = await FirebaseAuthService.UpdateUserProfileAsync(updateModel);
+            if (success)
+            {
+                Logger.LogInformation("Profile: Úspěšná aktualizace v databázi, aktualizujeme cache");
+
+                // Po úspěšné aktualizaci v databázi aktualizujeme cache
+                var updatedUser = await FirebaseAuthService.GetCurrentUserAsync();
+                if (updatedUser != null)
+                {
+                    await CacheService.SetAsync("currentUser", updatedUser, TimeSpan.FromHours(24));
+                    Logger.LogInformation("Profile: Cache uživatele aktualizována");
+                }
+
+                // Obnovíme session pouze při změně kritických údajů
+                if (needsSessionRestore)
+                {
+                    await FirebaseAuthService.TryRestoreSessionAsync();
+                }
+
+                // Odstraníme perzistentní notifikaci
+                NotificationService.RemovePersistentToast();
+
+                // Uložíme důležitou změnu profilu do historie
+                await NotificationService.AddNotificationAsync(new NotificationItem
+                    {
+                        Message = "Váš uživatelský profil byl úspěšně aktualizován",
+                        Type = NotificationType.Success,
+                        Category = NotificationCategory.System,
+                        Title = "Aktualizace profilu"
+                    });
+
+                IsEditing = false;
+                Logger.LogInformation("Profile: Znovu načítáme uživatelský profil");
+                await LoadUserProfile();
+            }
+            else
+            {
+                // V případě neúspěchu
+                NotificationService.RemovePersistentToast();
+                NotificationService.ShowToast("Aktualizace profilu se nezdařila", NotificationType.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Odstraníme perzistentní notifikaci při chybě
+            NotificationService.RemovePersistentToast();
+
+            Logger.LogError(ex, "Profile: Chyba při ukládání profilu");
+            NotificationService.ShowToast(ex.Message, NotificationType.Error);
+            await LoadUserProfile();
+        }
+    }
+
+    // Zpracování kliknutí na avatara - výběr nového profilového obrázku
+    private async Task HandleAvatarClick()
+    {
+        // Kontrolujeme, zda je uživatel v režimu úprav a zda je připojení k internetu
+        if (IsEditing)
+        {
+            // Přidáme kontrolu připojení k internetu
+            if (!ConnectivityService.IsConnected)
+            {
+                NotificationService.ShowToast("Změna profilového obrázku není dostupná v offline režimu", NotificationType.Warning);
+                return;
+            }
+
+            var options = await DialogService.ShowAsync<PhotoSourceDialog>("Vyberte zdroj fotografie");
+            if (options?.Result is not null)
+            {
+                var result = await options.Result;
+                if (result is not null && !result.Canceled && result.Data is string choice)
+                {
+                    switch (choice)
+                    {
+                        case "camera":
+                            await TakePhotoAndUpload();
+                            break;
+                        case "gallery":
+                            await PickPhotoAndUpload();
+                            break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Pořízení fotografie pomocí kamery a její nahrání
+    private async Task TakePhotoAndUpload()
+    {
+        if (!ConnectivityService.IsConnected)
+        {
+            NotificationService.ShowToast("Nahrávání fotografií není dostupné v offline režimu", NotificationType.Warning);
+            return;
+        }
+
+        try
+        {
+            isUploading = true;
+            StateHasChanged(); // Zajistí zobrazení loading indikátoru
+
+            var imageData = await PhotoService.CapturePhotoAsync();
+            if (imageData != null && imageData.Length > 0)
+            {
+                // Kontrolujeme velikost souboru
+                if (imageData.Length > 5 * 1024 * 1024)
+                {
+                    NotificationService.ShowToast("Soubor je příliš velký. Maximální velikost je 5MB.", NotificationType.Error);
+                    return;
+                }
+
+                // Zobrazíme informační hlášku
+                NotificationService.ShowPersistentToast("Probíhá nahrávání obrázku...", NotificationType.Info);
+
+                // Vytvoříme náhodné jméno souboru s příponou .jpg
+                var fileName = $"{Guid.NewGuid()}.jpg";
+
+                // Nahrajeme obrázek
+                var imageUrl = await FirebaseAuthService.UploadProfileImageAsync(imageData, fileName);
+                Logger.LogInformation($"Profile: Obrázek úspěšně nahrán: {imageUrl}");
+
+                // Aktualizujeme obě proměnné pro obrázek
+                ProfileImageUrl = imageUrl;
+                currentImageUrl = imageUrl;
+
+                // Aktualizujeme cache s informací o existenci obrázku
+                await CacheService.SetAsync("currentUserImageUrl", imageUrl, TimeSpan.FromHours(24));
+                await CacheService.SetAsync("currentUserImageExists", true, TimeSpan.FromHours(24));
+                Logger.LogInformation("Profile: Cache obrázku aktualizována");
+
+                // Aktualizujeme profil s novým URL obrázku
+                await FirebaseAuthService.UpdateUserProfileAsync(new UserProfileDto
+                    {
+                        UserName = UserName,
+                        FirstName = FirstName,
+                        LastName = LastName,
+                        Email = Email,
+                        ProfileImageUrl = imageUrl
+                    });
+
+                // Po úspěšné aktualizaci v databázi aktualizujeme cache uživatele
+                var updatedUser = await FirebaseAuthService.GetCurrentUserAsync();
+                if (updatedUser != null)
+                {
+                    await CacheService.SetAsync("currentUser", updatedUser, TimeSpan.FromHours(24));
+                    Logger.LogInformation("Profile: Cache uživatele aktualizována s novým obrázkem");
+                }
+
+                // Odstraníme perzistentní notifikaci po dokončení
+                NotificationService.RemovePersistentToast();
+
+                // Přidáme informaci o změně obrázku do historie notifikací
+                await NotificationService.AddNotificationAsync(new NotificationItem
+                    {
+                        Message = "Profilový obrázek byl úspěšně aktualizován",
+                        Type = NotificationType.Success,
+                        Category = NotificationCategory.System,
+                        Title = "Aktualizace profilu"
+                    });
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowToast("Chyba při zpracování fotografie: " + ex.Message, NotificationType.Error);
+        }
+        finally
+        {
+            isUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    // Výběr fotografie z galerie a její nahrání
+    private async Task PickPhotoAndUpload()
+    {
+        if (!ConnectivityService.IsConnected)
+        {
+            NotificationService.ShowToast("Nahrávání fotografií není dostupné v offline režimu", NotificationType.Warning);
+            return;
+        }
+
+        try
+        {
+            isUploading = true;
+            StateHasChanged(); // Zajistí zobrazení loading indikátoru
+
+            var imageData = await PhotoService.PickPhotoAsync();
+            if (imageData != null && imageData.Length > 0)
+            {
+                // Kontrolujeme velikost souboru
+                if (imageData.Length > 5 * 1024 * 1024)
+                {
+                    NotificationService.ShowToast("Soubor je příliš velký. Maximální velikost je 5MB.", NotificationType.Error);
+                    return;
+                }
+
+                // Zobrazíme informační hlášku
+                NotificationService.ShowPersistentToast("Probíhá nahrávání obrázku...", NotificationType.Info);
+
+                // Vytvoříme náhodné jméno souboru
+                var fileName = $"{Guid.NewGuid()}.jpg";
+
+                // Nahrajeme obrázek
+                var imageUrl = await FirebaseAuthService.UploadProfileImageAsync(imageData, fileName);
+                Logger.LogInformation($"Profile: Obrázek úspěšně nahrán: {imageUrl}");
+
+                // Aktualizujeme obě proměnné pro obrázek
+                ProfileImageUrl = imageUrl;
+                currentImageUrl = imageUrl;
+
+                // Aktualizujeme cache s informací o existenci obrázku
+                await CacheService.SetAsync("currentUserImageUrl", imageUrl, TimeSpan.FromHours(24));
+                await CacheService.SetAsync("currentUserImageExists", true, TimeSpan.FromHours(24));
+                Logger.LogInformation("Profile: Cache obrázku aktualizována");
+
+                // Aktualizujeme profil s novým URL obrázku
+                await FirebaseAuthService.UpdateUserProfileAsync(new UserProfileDto
+                    {
+                        UserName = UserName,
+                        FirstName = FirstName,
+                        LastName = LastName,
+                        Email = Email,
+                        ProfileImageUrl = imageUrl
+                    });
+
+                // Po úspěšné aktualizaci v databázi aktualizujeme cache uživatele
+                var updatedUser = await FirebaseAuthService.GetCurrentUserAsync();
+                if (updatedUser != null)
+                {
+                    await CacheService.SetAsync("currentUser", updatedUser, TimeSpan.FromHours(24));
+                    Logger.LogInformation("Profile: Cache uživatele aktualizována s novým obrázkem");
+                }
+
+                // Odstraníme perzistentní notifikaci
+                NotificationService.RemovePersistentToast();
+
+                // Přidáme informaci o změně obrázku do historie notifikací
+                await NotificationService.AddNotificationAsync(new NotificationItem
+                    {
+                        Message = "Profilový obrázek byl úspěšně aktualizován",
+                        Type = NotificationType.Success,
+                        Category = NotificationCategory.System,
+                        Title = "Aktualizace profilu"
+                    });
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Profile: Chyba při nahrávání fotografie");
+            NotificationService.ShowToast("Chyba při zpracování fotografie: " + ex.Message, NotificationType.Error);
+        }
+        finally
+        {
+            isUploading = false;
+            StateHasChanged();
+        }
+    }
+
+    // Otevření dialogu pro změnu hesla
+    private async Task OpenChangePasswordDialog()
+    {
+        if (!ConnectivityService.IsConnected)
+        {
+            NotificationService.ShowToast("Změna hesla není dostupná v offline režimu", NotificationType.Warning);
+            return;
+        }
+
+        var options = new DialogOptions
+            {
+                CloseOnEscapeKey = true,
+                MaxWidth = MaxWidth.Small,    // Zachováme konzistentní velikost s ostatními dialogy
+                FullWidth = true,
+            };
+
+        var dialog = DialogService.Show<ChangePasswordDialog>("Změna hesla", options);
+        await dialog.Result;  // Čekáme na výsledek, ale nemusíme ho zpracovávat
+    }
+
+    // Otevření dialogu pro deaktivaci účtu
+    private async Task OpenDeactivateAccountDialog()
+    {
+        if (!ConnectivityService.IsConnected)
+        {
+            NotificationService.ShowToast("Deaktivace účtu není dostupná v offline režimu", NotificationType.Warning);
+            return;
+        }
+
+        var result = await DialogService.ShowMessageBox(
+            "Deaktivovat účet",
+            "Opravdu chcete deaktivovat svůj účet? Tato akce je nevratná a budete muset kontaktovat administrátora pro opětovnou aktivaci účtu. Všechna vaše lokální data budou smazána.",
+            yesText: "Deaktivovat účet",
+            noText: "Zrušit",
+            options: new DialogOptions { MaxWidth = MaxWidth.ExtraSmall }
+        );
+
+        if (result ?? false)
+        {
+            try
+            {
+                // Zobrazíme perzistentní notifikaci
+                NotificationService.ShowPersistentToast("Probíhá deaktivace účtu...", NotificationType.Info);
+
+                // Získáme ID aktuálního uživatele
+                string? userId = FirebaseAuthService.GetCurrentUserId();
+                if (string.IsNullOrEmpty(userId))
+                {
+                    NotificationService.RemovePersistentToast();
+                    NotificationService.ShowToast("Nelze získat ID aktuálního uživatele", NotificationType.Error);
+                    return;
+                }
+
+                // 1. Deaktivujeme účet ve Firebase
+                bool success = await FirebaseAuthService.DeactivateAccountAsync(userId);
+                if (success)
+                {
+                    NotificationService.RemovePersistentToast();
+
+                    // 2. Kompletně smažeme LiteDB databázi
+                    Logger.LogInformation("Profile: Mazání lokální databáze před deaktivací účtu");
+                    bool dbWiped = LiteDbConfig.WipeDatabaseFile();
+                    if (!dbWiped)
+                    {
+                        Logger.LogWarning("Profile: Nepodařilo se smazat lokální databázi, pokračujeme v procesu deaktivace");
+                    }
+
+                    // 3. Vyčistíme cache
+                    await CacheService.ClearAsync(null);
+
+                    // 4. Odhlásíme uživatele
+                    await FirebaseAuthService.LogoutAsync(userId);
+
+                    // 5. Uložíme notifikaci o deaktivaci účtu
+                    await NotificationService.AddNotificationAsync(new NotificationItem
+                        {
+                            Message = "Váš účet byl úspěšně deaktivován. Pro opětovnou aktivaci kontaktujte administrátora.",
+                            Type = NotificationType.Info,
+                            Timestamp = DateTime.UtcNow,
+                            Category = NotificationCategory.System,
+                            Title = "Deaktivace účtu"
+                        }, showAfterForceLoad: true);
+
+                    // 6. Přesměrujeme s vynuceným restartem aplikace
+                    Navigation.NavigateTo("/login", forceLoad: true);
+                }
+                else
+                {
+                    NotificationService.RemovePersistentToast();
+                    NotificationService.ShowToast("Nepodařilo se deaktivovat účet", NotificationType.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                NotificationService.RemovePersistentToast();
+                NotificationService.ShowToast($"Chyba: {ex.Message}", NotificationType.Error);
+                Logger.LogError(ex, "Profile: Chyba při deaktivaci účtu");
+            }
+        }
+    }
+
+    // POMOCNÉ METODY
+    // Získání stylu pro avatar - nastavení velikosti a kurzoru
+    private string GetAvatarStyle()
+    {
+        string cursor = IsEditing && ConnectivityService.IsConnected ? "pointer" : "default";
+        return $"width: clamp(150px, 200px, 25vw); height: clamp(150px, 200px, 25vw); cursor: {cursor}; position: relative;";
+    }
+
+    // Zpracování chyby při načítání obrázku
+    private void HandleImageError()
+    {
+        // Když dojde k chybě při načítání obrázku, nastavíme URL na null,
+        // což způsobí přepnutí na zobrazení iniciály nebo ikony
+        currentImageUrl = null;
+        StateHasChanged();
+    }
+}
+
+
+
+
+

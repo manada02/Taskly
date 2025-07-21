@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Styly pro Android aplikaci -->
+<resources>
+  <!-- Hlavní téma aplikace -->
+  <style name="Maui.MainTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    
+    <!-- Nastavení splash screen jako pozadí -->
+    <item name="android:windowBackground">@drawable/splash_layout</item>
+  </style>
+</resources>

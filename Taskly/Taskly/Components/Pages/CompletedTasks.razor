@@ -1,0 +1,848 @@
+﻿@* Namespace a importy *@
+@page "/completed-tasks"
+@using Taskly.Components.Core
+@using Taskly.Models
+@using Taskly.Services.Tasks
+@using Taskly.Services.Auth
+@using Taskly.Services.Connectivity
+@using Taskly.Services.Projects
+
+@* Služby pro DI *@
+@inject ITaskService TaskService
+@inject IAuthService AuthService
+@inject ConnectivityService ConnectivityService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject ICacheService CacheService
+@inject INotificationService NotificationService
+@inject IProjectService ProjectService
+@implements IDisposable
+
+<div>
+    @* Hlavní kontejner stránky dokončených úkolů *@
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+        <MudPaper Elevation="3" Class="pa-4 completed-tasks-page-container">
+
+            @* Hlavička stránky s ikonou, nadpisy a akčními prvky *@
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mb-4">
+                        @* Ikona stránky dokončených úkolů *@
+                        <div class="completed-tasks-header-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Success" />
+                        </div>
+
+                        @* Hlavní nadpisy a popis stránky *@
+                        <div>
+                            <MudText Typo="Typo.h4" Class="completed-tasks-page-title">Dokončené úkoly</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="completed-tasks-page-subtitle">
+                                Přehled všech dokončených úkolů
+                            </MudText>
+                        </div>
+                        <MudSpacer />
+
+                        @* Stavové indikátory a akční tlačítka *@
+                        <div class="completed-tasks-header-actions">
+                            @* Tlačítko pro synchronizaci *@
+                            @if (isAuthenticated && isConnected)
+                            {
+                                <MudTooltip Text="Synchronizovat úkoly" Placement="Placement.Bottom">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Sync"
+                                                   Color="Color.Primary"
+                                                   OnClick="SynchronizeTasks"
+                                                   Disabled="@isSynchronizing"
+                                                   Class="completed-tasks-action-button" />
+                                </MudTooltip>
+                            }
+
+                           
+                            @* Stav připojení k internetu *@
+                            <MudTooltip Text="@(isConnected ? "Online" : "Offline")">
+                                <div class="completed-tasks-connection-status">
+                                    <MudIcon Icon="@(isConnected ? Icons.Material.Filled.CloudDone : Icons.Material.Filled.CloudOff)"
+                                             Color="@(isConnected ? Color.Success : Color.Error)" />
+                                </div>
+                            </MudTooltip>
+
+                            @* Avatar přihlášeného uživatele *@
+                            <MudTooltip Text="@(isAuthenticated ? $"Přihlášen jako {currentUser?.Username ?? currentUser?.Email ?? "uživatel"}" : "Nepřihlášený uživatel")" Placement="Placement.Start">
+                                @if (isAuthenticated)
+                                {
+                                    <MudAvatar Color="Color.Primary" Size="Size.Medium" Class="completed-tasks-user-avatar">
+                                        @if (isLoadingImage)
+                                        {
+                                            <MudProgressCircular Color="Color.Default" Size="Size.Small" Indeterminate="true" />
+                                        }
+                                        else if (!string.IsNullOrWhiteSpace(currentImageUrl))
+                                        {
+                                            <MudImage Src="@currentImageUrl"
+                                                      Alt="Profile"
+                                                      Elevation="0"
+                                                      Fluid="true"
+                                                      ObjectFit="ObjectFit.Cover"
+                                                      @onerror="HandleImageError" />
+                                        }
+                                        else if (currentUser?.Username?.Length > 0)
+                                        {
+                                            @(currentUser.Username[0].ToString().ToUpper())
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Size="Size.Medium" />
+                                        }
+                                    </MudAvatar>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.NoAccounts" Color="Color.Default" Size="Size.Medium" />
+                                }
+                            </MudTooltip>
+                        </div>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+
+            @* Sekce vyhledávání a navigace *@
+            <MudGrid Class="mt-4">
+                @* Vyhledávací pole *@
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="searchString"
+                                  Placeholder="Vyhledat v dokončených úkolech..."
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Search"
+                                  IconSize="Size.Medium"
+                                  Class="completed-tasks-search-field" />
+                </MudItem>
+
+                @* Tlačítko pro návrat na aktivní úkoly *@
+                <MudItem xs="12" sm="6" Class="d-flex justify-end align-center">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.ArrowBack"
+                               Href="/tasks"
+                               Class="completed-tasks-back-button">
+                        Zpět na aktivní úkoly
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+
+            @* Statistické karty s přehledem dokončených úkolů *@
+            <MudGrid Class="mt-4 mb-4">
+                @* Karta: Celkem dokončeno *@
+                <MudItem xs="12" sm="6" md="4">
+                    <MudPaper Elevation="2" Class="pa-4 completed-tasks-stats-card">
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                            <div class="completed-tasks-stats-icon">
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" />
+                            </div>
+                            <MudText Class="completed-tasks-stats-text">Celkem dokončeno: @completedTasks.Count</MudText>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+
+                @* Karta: Dokončeno včas *@
+                <MudItem xs="12" sm="6" md="4">
+                    <MudPaper Elevation="2" Class="pa-4 completed-tasks-stats-card">
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                            <div class="completed-tasks-stats-icon">
+                                <MudIcon Icon="@Icons.Material.Filled.AssignmentTurnedIn" Color="Color.Info" />
+                            </div>
+                            <MudText Class="completed-tasks-stats-text">Dokončeno včas: @completedTasks.Count(t => t.CompletedAt <= t.DueDate)</MudText>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+
+                @* Karta: Dokončení po termínu *@
+                <MudItem xs="12" sm="6" md="4">
+                    <MudPaper Elevation="2" Class="pa-4 completed-tasks-stats-card">
+                        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                            <div class="completed-tasks-stats-icon">
+                                <MudIcon Icon="@Icons.Material.Filled.Event" Color="Color.Warning" />
+                            </div>
+                            <MudText Class="completed-tasks-stats-text">Dokončeno po termínu: @completedTasks.Count(t => t.CompletedAt > t.DueDate)</MudText>
+                        </MudStack>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            @* Hlavní tabulka se seznamem dokončených úkolů *@
+            <MudPaper Elevation="1" Class="completed-tasks-table-container">
+                <MudTable Items="@GetFilteredTasks()"
+                          Dense="true"
+                          Hover="true"
+                          Breakpoint="Breakpoint.Sm"
+                          Loading="@isLoading"
+                          LoadingProgressColor="Color.Info"
+                          SortLabel="Seřadit podle"
+                          Class="completed-tasks-data-table">
+                    <ToolBarContent>
+
+                        @* Toolbar tabulky s počtem dokončených úkolů *@
+                        <div class="completed-tasks-table-toolbar">
+                            <MudText Typo="Typo.h6" Class="completed-tasks-table-title">Dokončené úkoly (@GetFilteredTasks().Count())</MudText>
+                            <MudSpacer />
+
+                            @* Tlačítko pro hromadné mazání dokončených úkolů *@
+                            <MudTooltip Text="Vymazat všechny dokončené úkoly" Placement="Placement.Start">
+                                <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep"
+                                               Color="Color.Error"
+                                               OnClick="ClearAllCompletedTasks"
+                                               Disabled="@(!GetFilteredTasks().Any())"
+                                               Size="Size.Medium"
+                                               Class="completed-tasks-action-button" />
+                            </MudTooltip>
+                        </div>
+                    </ToolBarContent>
+                    <HeaderContent>
+                        @* Hlavička tabulky s řaditelelnými sloupci *@
+                        <MudTh Class="completed-tasks-table-header"><MudTableSortLabel T="TaskItem" SortBy="x => x.Title">Název</MudTableSortLabel></MudTh>
+                        <MudTh Class="completed-tasks-table-header"><MudTableSortLabel T="TaskItem" SortBy="x => x.Description">Popis</MudTableSortLabel></MudTh>
+                        <MudTh Class="completed-tasks-table-header"><MudTableSortLabel T="TaskItem" SortBy="x => x.CreatedAt">Vytvořeno</MudTableSortLabel></MudTh>
+                        <MudTh Class="completed-tasks-table-header"><MudTableSortLabel T="TaskItem" SortBy="x => GetProjectName(x.ProjectId) ?? string.Empty">Projekt</MudTableSortLabel></MudTh>
+                        <MudTh Class="completed-tasks-table-header"><MudTableSortLabel T="TaskItem" SortBy="x => x.DueDate">Termín</MudTableSortLabel></MudTh>
+                        <MudTh Class="completed-tasks-table-header"><MudTableSortLabel T="TaskItem" SortBy="x => x.CompletedAt">Dokončeno</MudTableSortLabel></MudTh>
+                        <MudTh Class="completed-tasks-table-header"><MudTableSortLabel T="TaskItem" SortBy="x => x.Priority">Priorita</MudTableSortLabel></MudTh>
+                        <MudTh Class="completed-tasks-table-header">Akce</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Název" Class="completed-tasks-table-cell completed-tasks-clickable-row" @onclick="@(() => ViewTaskDetails(context))" title="Klikněte pro zobrazení detailů úkolu">
+                            @* Název úkolu s indikátorem synchronizace *@
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                @if (context.NeedsSynchronization && (TaskInitializer.IsInitialized || isInitializerCompleted))
+                                {
+                                    <MudTooltip Text="Čeká na synchronizaci" Placement="Placement.Top">
+                                        <MudIcon Icon="@Icons.Material.Filled.Sync" Size="Size.Small"
+                                                 Color="Color.Warning" Class="completed-tasks-sync-icon" />
+                                    </MudTooltip>
+                                }
+                                <MudTooltip Text="@context.Title" Placement="Placement.Top" Style="max-width: 300px; white-space: normal; word-break: break-word;">
+                                    <MudText Typo="Typo.body2" Class="completed-tasks-item-title">
+                                        @context.Title
+                                    </MudText>
+                                </MudTooltip>
+                            </MudStack>
+                        </MudTd>
+                        <MudTd DataLabel="Popis" Class="completed-tasks-table-cell completed-tasks-clickable-row" @onclick="@(() => ViewTaskDetails(context))" title="Klikněte pro zobrazení detailů úkolu">
+                            @* Popis úkolu nebo zpráva o prázdném popisu *@
+                            @if (string.IsNullOrWhiteSpace(context.Description))
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Tertiary" Class="completed-tasks-empty-description">Bez popisu</MudText>
+                            }
+                            else
+                            {
+                                <MudTooltip Text="@context.Description" Placement="Placement.Top" Style="max-width: 300px; white-space: normal; word-break: break-word;">
+                                    <MudText Typo="Typo.body2" Class="completed-tasks-item-description">
+                                        @context.Description
+                                    </MudText>
+                                </MudTooltip>
+                            }
+                        </MudTd>
+
+                        <MudTd DataLabel="Vytvořeno" Class="completed-tasks-table-cell completed-tasks-clickable-row" @onclick="@(() => ViewTaskDetails(context))" title="Klikněte pro zobrazení detailů úkolu">
+                            @* Datum a čas vytvoření úkolu *@
+                            <MudText Typo="Typo.caption" Class="completed-tasks-date-text">
+                                @context.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                            </MudText>
+                        </MudTd>
+
+                        <MudTd DataLabel="Projekt" Class="completed-tasks-table-cell completed-tasks-clickable-row" @onclick="@(() => ViewTaskDetails(context))" title="Klikněte pro zobrazení detailů úkolu">
+                            @* Chip s názvem projektu nebo zpráva o nepřiřazení *@
+                            @if (!string.IsNullOrEmpty(context.ProjectId))
+                            {
+                                <MudTooltip Text="@GetProjectName(context.ProjectId)" Placement="Placement.Top">
+                                    <MudChip T="string"
+                                             Color="Color.Primary"
+                                             Size="Size.Small"
+                                             OnClick="@(() => NavigateToProjectDetail(context.ProjectId))"
+                                             Class="completed-tasks-project-chip"
+                                             Icon="@Icons.Material.Filled.Folder">
+                                        <span class="completed-tasks-project-name">@GetProjectName(context.ProjectId)</span>
+                                    </MudChip>
+                                </MudTooltip>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Tertiary" Class="completed-tasks-no-project">Bez projektu</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Termín" Class="completed-tasks-table-cell completed-tasks-clickable-row" @onclick="@(() => ViewTaskDetails(context))" title="Klikněte pro zobrazení detailů úkolu">
+                            @* Chip s termínem a indikací včasnosti dokončení *@
+                            @if (context.DueDate.HasValue)
+                            {
+                                <MudChip T="string"
+                                         Color="@(context.CompletedAt > context.DueDate ? Color.Error : Color.Success)"
+                                         Size="Size.Small"
+                                         Icon="@(context.CompletedAt > context.DueDate ? Icons.Material.Filled.Warning : Icons.Material.Filled.Schedule)"
+                                         Class="completed-tasks-date-chip">
+                                    @context.DueDate?.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                </MudChip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Dokončeno" Class="completed-tasks-table-cell completed-tasks-clickable-row" @onclick="@(() => ViewTaskDetails(context))" title="Klikněte pro zobrazení detailů úkolu">
+
+                            @* Chip s datem dokončení úkolu *@
+                            @if (context.CompletedAt.HasValue)
+                            {
+                                <MudChip T="string"
+                                         Color="Color.Success"
+                                         Size="Size.Small"
+                                         Icon="@Icons.Material.Filled.CheckCircle"
+                                         Class="completed-tasks-completion-chip">
+                                    @context.CompletedAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                </MudChip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Priorita" Class="completed-tasks-table-cell completed-tasks-clickable-row" @onclick="@(() => ViewTaskDetails(context))" title="Klikněte pro zobrazení detailů úkolu">
+                            @* Chip s prioritou úkolu *@
+                            <MudChip T="string"
+                                     Color="@GetPriorityColor(context.Priority).Color"
+                                     Size="Size.Small"
+                                     Variant="Variant.Filled"
+                                     Class="completed-tasks-priority-chip">
+                                @GetPriorityColor(context.Priority).DisplayName
+                            </MudChip>
+                        </MudTd>
+                        <MudTd DataLabel="Akce" Class="completed-tasks-table-cell">
+
+                            @* Akční tlačítka pro práci s dokončeným úkolem *@
+                            <MudButtonGroup Size="Size.Small" Variant="Variant.Text" Class="completed-tasks-action-buttons">
+                                <MudTooltip Text="Znovu aktivovat úkol" Placement="Placement.Top">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                                                   OnClick="@(() => ReactivateTask(context))"
+                                                   Color="Color.Primary"
+                                                   Class="completed-tasks-table-action-button" />
+                                </MudTooltip>
+                                <MudTooltip Text="Smazat" Placement="Placement.Top">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                   OnClick="@(() => DeleteTask(context))"
+                                                   Color="Color.Error"
+                                                   Class="completed-tasks-table-action-button" />
+                                </MudTooltip>
+                            </MudButtonGroup>
+                        </MudTd>
+                    </RowTemplate>
+                    <PagerContent>
+                        @* Stránkování tabulky *@
+                        <MudTablePager PageSizeOptions="new int[] {5, 10, 15}"
+                                       RowsPerPageString="Řádků:"
+                                       InfoFormat="{first_item}-{last_item} z {all_items}"
+                                       Class="completed-tasks-table-pager" />
+                    </PagerContent>
+                    <NoRecordsContent>
+                        @* Obsah zobrazený při prázdné tabulce *@
+                        <div class="completed-tasks-no-records">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Large" Color="Color.Tertiary" Class="mb-2" />
+                            <MudText Typo="Typo.h6" Color="Color.Tertiary" Class="mb-2">Žádné dokončené úkoly</MudText>
+                            <MudText Typo="Typo.body1" Color="Color.Secondary">Nebyly nalezeny žádné dokončené úkoly.</MudText>
+                        </div>
+                    </NoRecordsContent>
+                </MudTable>
+            </MudPaper>
+        </MudPaper>
+    </MudContainer>
+</div>
+
+@code {
+    // PROMĚNNÉ A VLASTNOSTI
+    // Základní stavové proměnné pro řízení UI
+    private bool isLoading = true;
+    private bool isSynchronizing = false;
+    private string searchString = string.Empty;
+    private List<TaskItem> completedTasks = new();
+    private List<TaskItem> allTasks = new();
+    private bool isConnected = false;
+    private bool isAuthenticated = false;
+    private int pendingSyncCount = 0;
+    private AppUser? currentUser;
+
+    // Cache pro názvy projektů - zrychluje zobrazení názvů projektů
+    private Dictionary<string, string> projectNameCache = new();
+
+    // Proměnné pro profilový obrázek
+    private string? currentImageUrl;
+    private bool isLoadingImage = false;
+
+    // Příznak dokončení inicializace úloh
+    private bool isInitializerCompleted = false;
+
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    // Inicializace komponenty - načtení dat a přihlášení k událostem
+    protected override async Task OnInitializedAsync()
+    {
+        // Registrujeme se k událostem pro aktualizace dat
+        ConnectivityService.ConnectivityChanged += OnConnectivityChanged;
+        TaskService.OnTasksChanged += OnTasksChanged;
+        ProjectService.OnProjectsChanged += OnProjectsChanged;
+        TaskInitializer.OnInitializationCompleted += OnTaskInitializerCompleted;
+
+        // Rychlá kontrola přihlášení z lokálního úložiště
+        var quickCheck = await SecureStorage.GetAsync("user_logged_in");
+        bool isOfflineMode = !ConnectivityService.IsConnected;
+
+        // Načteme aktuální stav připojení k internetu
+        isConnected = ConnectivityService.IsConnected;
+
+        if (quickCheck == "true")
+        {
+            // Uživatel byl dříve přihlášen - použijeme data z cache
+            isAuthenticated = true;
+            isLoadingImage = true;
+            StateHasChanged(); // Vynutíme překreslení pro zobrazení načítání
+
+            try
+            {
+                // Načteme uživatele z cache
+                currentUser = await CacheService.GetOrCreateAsync<AppUser>(
+                    "currentUser",
+                    () => Task.FromResult<AppUser>(null!),
+                    TimeSpan.FromHours(24));
+
+                if (currentUser != null)
+                {
+                    // Načteme URL obrázku z cache
+                    currentImageUrl = await CacheService.GetOrCreateAsync<string?>(
+                        "currentUserImageUrl",
+                        () => Task.FromResult<string?>(null),
+                        TimeSpan.FromHours(24));
+
+                    // Ihned aplikujeme změny v UI
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (Exception ex)
+            {
+                NotificationService.ShowToast($"Chyba při načítání uživatele: {ex.Message}", NotificationType.Error);
+            }
+            finally
+            {
+                isLoadingImage = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        else
+        {
+            // Standardní kontrola autentizace
+            isAuthenticated = await AuthService.IsUserAuthenticated();
+
+            if (isAuthenticated && currentUser == null)
+            {
+                // Načteme data o uživateli, pokud je přihlášen
+                currentUser = await CacheService.GetOrCreateAsync<AppUser>(
+                    "currentUser",
+                    () => AuthService.GetCurrentUserAsync(),
+                    TimeSpan.FromHours(24));
+
+                await LoadProfileImageAsync();
+            }
+        }
+
+        // Načteme dokončené úkoly a jejich projekty
+        await LoadCompletedTasksAsync();
+        await LoadProjectNamesAsync();
+    }
+
+    // Dodatečné načtení po prvním vykreslení
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Nejprve zkontrolujeme a případně načteme profilový obrázek
+            if (isAuthenticated && currentImageUrl == null)
+            {
+                await LoadProfileImageAsync();
+            }
+
+            // Pak načteme dokončené úkoly - zajistíme aktuální data
+            await LoadCompletedTasksAsync();
+        }
+    }
+
+    // EVENT HANDLERY
+    // Zpracování změny stavu připojení k internetu
+    private async void OnConnectivityChanged(bool isConnected)
+    {
+        this.isConnected = isConnected;
+
+        if (isConnected)
+        {
+            // Kontrolujeme nastavení automatické synchronizace
+            bool autoSync = Preferences.Default.Get("app_auto_sync", true);
+
+            // Automaticky synchronizujeme při obnovení připojení, pokud je to povoleno
+            if (autoSync && isAuthenticated && pendingSyncCount > 0)
+            {
+                await InvokeAsync(SynchronizeTasks);
+            }
+            else if (!autoSync && pendingSyncCount > 0)
+            {
+                // Informujeme uživatele, že existují nesynchronizované úkoly
+                NotificationService.ShowToast($"Existuje {pendingSyncCount} nesynchronizovaných úkolů. Synchronizace je vypnuta v nastavení.", NotificationType.Info);
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Zpracování událostí změny úkolů
+    private async void OnTasksChanged()
+    {
+        await InvokeAsync(LoadCompletedTasksAsync);
+    }
+
+    // Zpracování událostí změny projektů
+    private async void OnProjectsChanged()
+    {
+        await LoadProjectNamesAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Zpracování události dokončení inicializace
+    private void OnTaskInitializerCompleted()
+    {
+        isInitializerCompleted = true;
+        InvokeAsync(() =>
+        {
+            StateHasChanged();
+        });
+    }
+
+    // Zpracování chyby při načítání obrázku
+    private void HandleImageError()
+    {
+        // Když se nepodaří načíst obrázek, nastavíme URL na null,
+        // což způsobí přepnutí na zobrazení iniciály nebo ikony
+        currentImageUrl = null;
+        StateHasChanged();
+    }
+
+    // NAČÍTÁNÍ DAT
+    // Načtení dokončených úkolů z databáze
+    private async Task LoadCompletedTasksAsync()
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            // Načteme data z databáze
+            await TaskService.PreloadAllTasksAsync();
+            allTasks = await TaskService.GetTasksAsync();
+            completedTasks = allTasks
+                .Where(t => t.Status == TaskItemStatus.Completed)
+                .OrderByDescending(t => t.CompletedAt)
+                .ToList();
+
+            // Zkontrolujeme indikátory synchronizace
+            pendingSyncCount = completedTasks.Count(t => t.NeedsSynchronization);
+
+            // Pokud by nějaké indikátory zůstaly, zkusíme je vynulovat ručně
+            // ale pokud je jen povolena automatická synchronizace
+            bool autoSync = Preferences.Default.Get("app_auto_sync", true);
+            if (pendingSyncCount > 0 && isConnected && isAuthenticated && autoSync)
+            {
+                Console.WriteLine("CompletedTasks: Indikátory zůstaly i po synchronizaci - aplikujeme manuální opravu");
+                foreach (var task in completedTasks.Where(t => t.NeedsSynchronization))
+                {
+                    Console.WriteLine($"CompletedTasks: Resetujeme indikátor pro úkol {task.Id}");
+                    task.NeedsSynchronization = false;
+                    await TaskService.UpdateTaskAsync(task);
+                }
+
+                // Aktualizujeme seznam znovu po manuálním resetu
+                allTasks = await TaskService.GetTasksAsync();
+                completedTasks = allTasks
+                    .Where(t => t.Status == TaskItemStatus.Completed)
+                    .OrderByDescending(t => t.CompletedAt)
+                    .ToList();
+                pendingSyncCount = completedTasks.Count(t => t.NeedsSynchronization);
+            }
+            else if (pendingSyncCount > 0 && isConnected && isAuthenticated && !autoSync)
+            {
+                // Pouze logujeme, že synchronizace je vypnuta
+                Console.WriteLine($"CompletedTasks: Nalezeno {pendingSyncCount} nesynchronizovaných úkolů, ale automatická synchronizace je vypnuta");
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowToast($"Chyba při načítání dokončených úkolů: {ex.Message}", NotificationType.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    // Načtení názvů projektů do lokální cache
+    private async Task LoadProjectNamesAsync()
+    {
+        try
+        {
+            var projects = await ProjectService.GetProjectsAsync();
+            projectNameCache.Clear();
+
+            foreach (var project in projects)
+            {
+                projectNameCache[project.Id] = project.Name;
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowToast($"Chyba při načítání projektů: {ex.Message}", NotificationType.Error);
+        }
+    }
+
+    // Načtení profilového obrázku uživatele
+    private async Task LoadProfileImageAsync()
+    {
+        try
+        {
+            isLoadingImage = true;
+            StateHasChanged();
+
+            // Použijeme cache pro rychlejší načítání
+            currentImageUrl = await CacheService.GetOrCreateAsync<string?>(
+                "currentUserImageUrl",
+                () => Task.FromResult<string?>(null),
+                TimeSpan.FromHours(24));
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowToast($"Chyba při načítání profilového obrázku: {ex.Message}", NotificationType.Error);
+            currentImageUrl = null;
+        }
+        finally
+        {
+            isLoadingImage = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // UI AKCE
+    // Smazání dokončeného úkolu
+    private async Task DeleteTask(TaskItem task)
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Smazat úkol",
+            "Opravdu chcete smazat tento dokončený úkol?",
+            yesText: "Smazat",
+            cancelText: "Zrušit"
+        );
+
+        if (result == true)
+        {
+            try
+            {
+                await TaskService.DeleteTaskAsync(task.Id);
+
+                NotificationService.ShowToast($"Úkol byl smazán", NotificationType.Success);
+
+                await LoadCompletedTasksAsync();
+            }
+            catch (Exception ex)
+            {
+                NotificationService.ShowToast($"Chyba při mazání úkolu: {ex.Message}", NotificationType.Error);
+            }
+        }
+    }
+
+    // Smazání všech dokončených úkolů najednou
+    private async Task ClearAllCompletedTasks()
+    {
+        var filteredTasksCount = GetFilteredTasks().Count();
+        if (filteredTasksCount == 0) return;
+
+        // Zobrazíme potvrzovací dialog
+        bool? result = await DialogService.ShowMessageBox(
+            "Smazat všechny dokončené úkoly",
+            $"Opravdu chcete smazat všech {filteredTasksCount} dokončených úkolů?",
+            yesText: "Smazat všechny",
+            cancelText: "Zrušit"
+        );
+
+        if (result == true)
+        {
+            try
+            {
+                isLoading = true;
+                StateHasChanged();
+
+                // Zavoláme službu pro smazání všech dokončených úkolů
+                await TaskService.ClearAllTasksAsync("Completed");
+
+                // Přidáme notifikaci do historie pro sledování důležitých akcí
+                await NotificationService.AddNotificationAsync(new NotificationItem
+                    {
+                        Message = $"Bylo smazáno {filteredTasksCount} dokončených úkolů",
+                        Type = NotificationType.Info,
+                        Category = NotificationCategory.Task,
+                        Title = "Hromadné mazání"
+                    });
+
+                await LoadCompletedTasksAsync();
+            }
+            catch (Exception ex)
+            {
+                NotificationService.ShowToast($"Chyba při mazání úkolů: {ex.Message}", NotificationType.Error);
+            }
+            finally
+            {
+                isLoading = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    // Zobrazení detailů úkolu v readonly režimu
+    private async Task ViewTaskDetails(TaskItem task)
+    {
+        var parameters = new DialogParameters();
+        parameters.Add("Task", task.Clone());
+        parameters.Add("IsReadOnly", true);
+        parameters.Add("IsOffline", !isConnected);
+
+        await DialogService.ShowAsync<TaskEditDialog>("Detaily úkolu", parameters);
+    }
+
+    // Synchronizace úkolů se serverem
+    private async Task SynchronizeTasks()
+    {
+        if (!isConnected || !isAuthenticated)
+        {
+            NotificationService.ShowToast("Synchronizace není možná - zkontrolujte připojení k internetu a přihlášení", NotificationType.Warning);
+            return;
+        }
+
+        try
+        {
+            isSynchronizing = true;
+            StateHasChanged();
+
+            await TaskService.SynchronizeTasksOnConnectionRestoredAsync();
+
+            // Kontrolujeme nesynchronizované úkoly
+            var tasks = await TaskService.GetTasksAsync();
+            var tasksNeedingSync = tasks.Where(t => t.NeedsSynchronization).ToList();
+
+            if (tasksNeedingSync.Count > 0)
+            {
+                foreach (var task in tasksNeedingSync)
+                {
+                    task.NeedsSynchronization = false;
+                    await TaskService.UpdateTaskAsync(task);
+                }
+            }
+
+            // Zobrazíme perzistentní toast během synchronizace
+            NotificationService.ShowPersistentToast("Probíhá synchronizace úkolů...", NotificationType.Info);
+
+            // Odstraníme perzistentní toast po dokončení
+            NotificationService.RemovePersistentToast();
+
+            // Přidáme záznam do historie, protože synchronizace je důležitá událost
+            await NotificationService.AddNotificationAsync(new NotificationItem
+                {
+                    Message = "Synchronizace úkolů byla úspěšně dokončena",
+                    Type = NotificationType.Success,
+                    Category = NotificationCategory.System,
+                    Title = "Synchronizace"
+                });
+
+            await LoadCompletedTasksAsync();
+        }
+        catch (Exception ex)
+        {
+            // Odstraníme perzistentní toast v případě chyby
+            NotificationService.RemovePersistentToast();
+
+            NotificationService.ShowToast($"Chyba při synchronizaci úkolů: {ex.Message}", NotificationType.Error);
+        }
+        finally
+        {
+            isSynchronizing = false;
+            StateHasChanged();
+        }
+    }
+
+    // Vrácení dokončeného úkolu mezi aktivní
+    private async Task ReactivateTask(TaskItem task)
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Znovu aktivovat úkol",
+            "Chcete tento úkol označit jako nedokončený a přesunout zpět mezi aktivní úkoly?",
+            yesText: "Ano",
+            cancelText: "Ne"
+        );
+
+        if (result == true)
+        {
+            try
+            {
+                task.Status = TaskItemStatus.InProgress;
+                task.CompletedAt = null;
+
+                await TaskService.UpdateTaskAsync(task);
+
+                NotificationService.ShowToast($"Úkol \"{task.Title}\" byl znovu aktivován", NotificationType.Info);
+                await LoadCompletedTasksAsync();
+            }
+            catch (Exception ex)
+            {
+                NotificationService.ShowToast($"Chyba při reaktivaci úkolu: {ex.Message}", NotificationType.Error);
+            }
+        }
+    }
+
+    // Navigace na detail projektu
+    private void NavigateToProjectDetail(string projectId)
+    {
+        NavigationManager.NavigateTo($"/projects/{projectId}");
+    }
+
+    // POMOCNÉ METODY
+    // Filtrování úkolů podle vyhledávacího řetězce
+    private IEnumerable<TaskItem> GetFilteredTasks()
+    {
+        if (completedTasks == null) return Enumerable.Empty<TaskItem>();
+
+        return completedTasks.Where(t =>
+            string.IsNullOrWhiteSpace(searchString) ||
+            (!string.IsNullOrWhiteSpace(t.Title) && t.Title.Contains(searchString, StringComparison.OrdinalIgnoreCase)) ||
+            (!string.IsNullOrWhiteSpace(t.Description) && t.Description.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+        ).ToList();
+    }
+
+    // Získání názvu projektu podle ID z cache
+    private string GetProjectName(string? projectId)
+    {
+        if (string.IsNullOrEmpty(projectId))
+            return "-";
+
+        if (projectNameCache.TryGetValue(projectId, out string? name))
+            return name ?? "Neznámý projekt";
+
+        return "Neznámý projekt";
+    }
+
+    // Převod priority úkolu na barvu a textový popis
+    private (Color Color, string DisplayName) GetPriorityColor(TaskPriority priority) => priority switch
+    {
+        TaskPriority.Low => (Color.Success, "Nízká"),
+        TaskPriority.Medium => (Color.Warning, "Střední"),
+        TaskPriority.High => (Color.Error, "Vysoká"),
+        TaskPriority.Critical => (Color.Dark, "Kritická"),
+        _ => (Color.Default, priority.ToString())
+    };
+
+    // UVOLNĚNÍ ZDROJŮ
+    // Uvolní zdroje komponenty - odregistruje event handlery pro předejití memory leaků
+    public void Dispose()
+    {
+        // Odhlásíme se od všech událostí, abychom předešli memory leakům
+        ConnectivityService.ConnectivityChanged -= OnConnectivityChanged;
+        TaskService.OnTasksChanged -= OnTasksChanged;
+        ProjectService.OnProjectsChanged -= OnProjectsChanged;
+        TaskInitializer.OnInitializationCompleted -= OnTaskInitializerCompleted;
+    }
+}

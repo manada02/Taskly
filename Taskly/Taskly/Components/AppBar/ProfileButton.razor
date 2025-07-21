@@ -1,0 +1,613 @@
+﻿@* Potřebné namespace *@
+@using System.ComponentModel.DataAnnotations
+@using Taskly.Models
+@using Taskly.Services.Auth
+@using Microsoft.Maui.Storage
+@using Firebase.Auth
+@using Microsoft.Extensions.Logging
+@using Taskly.Services.Cache
+
+@* Služby pro DI *@
+@inject FirebaseAuthClient authClient
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject IAuthService FirebaseAuthService
+@implements IDisposable
+@inject ILogger<ProfileButton> Logger
+@inject ICacheService CacheService
+@inject ConnectivityService ConnectivityService
+@inject INotificationService NotificationService
+
+
+@* Profilová ikona s tooltip - zobrazení přihlašovacího menu *@
+<MudTooltip Text="@(isAuthenticated ? "Váš účet" : "Přihlásit se")">
+
+    <MudMenu AnchorOrigin="Origin.BottomRight"
+             TransformOrigin="Origin.TopRight">
+
+        @* Tlačítko profilové ikony - zobrazuje avatar nebo načítací indikátor *@
+        <ActivatorContent>
+            <MudIconButton Color="Color.Inherit" OnClick="HandleProfileClick">
+                @if (isLoading)
+                {
+                    <MudProgressCircular Color="Color.Default" Size="Size.Small" Indeterminate="true" />
+                }
+                else if (!string.IsNullOrWhiteSpace(currentImageUrl))
+                {
+                    @if (ConnectivityService.IsConnected || imageWasLoadedInSession)
+                    {
+                        <MudAvatar Size="Size.Medium">
+                            <MudImage Src="@currentImageUrl"
+                                      Alt="Profile"
+                                      Elevation="0"
+                                      Fluid="true"
+                                      ObjectFit="ObjectFit.Cover"
+                                      @onload="() => imageWasLoadedInSession = true" />
+                        </MudAvatar>
+                    }
+                    else if (currentUser?.Username?.Length > 0)
+                    {
+                        <MudAvatar Size="Size.Medium" Color="Color.Primary">
+                            @(currentUser.Username[0].ToString().ToUpper())
+                        </MudAvatar>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.AccountCircle" />
+                    }
+                }
+                else
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.AccountCircle" />
+                }
+            </MudIconButton>
+        </ActivatorContent>
+        <ChildContent>
+            @if (isAuthenticated)
+            {
+                @* Karta s informacemi o uživateli a menu položkami *@
+                <MudCard Style="min-width: 250px; padding: 16px;">
+                    <MudStack>
+
+                        @* Informace o uživateli *@
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="3">
+                            @* Profilový obrázek v menu *@
+                            <MudAvatar Size="Size.Large" Color="Color.Primary">
+                                @if (isLoading)
+                                {
+                                    <MudProgressCircular Color="Color.Secondary" Size="Size.Small" Indeterminate="true" />
+                                }
+                                else if (!string.IsNullOrWhiteSpace(currentImageUrl))
+                                {
+                                    @if (ConnectivityService.IsConnected || imageWasLoadedInSession)
+                                    {
+                                        <MudImage Src="@currentImageUrl"
+                                                  Alt="Profile"
+                                                  Elevation="0"
+                                                  Fluid="true"
+                                                  ObjectFit="ObjectFit.Cover"
+                                                  @onload="() => imageWasLoadedInSession = true" />
+                                    }
+                                    else if (currentUser?.Username?.Length > 0)
+                                    {
+                                        @(currentUser.Username[0].ToString().ToUpper())
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Size="Size.Large" />
+                                    }
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Size="Size.Large" />
+                                }
+                            </MudAvatar>
+                            <MudStack Spacing="0" Justify="Justify.Center">
+                                <MudText Typo="Typo.body1" Style="font-weight: 500;">@currentUser?.Username</MudText>
+                                <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary);">@currentUser?.Email</MudText>
+                            </MudStack>
+                        </MudStack>
+
+                        <MudDivider Class="my-1" />
+
+                        @* Navigační položky menu *@
+                        <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/tasks"))">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Assignment" Size="Size.Small" />
+                                <MudText>Moje Úkoly</MudText>
+                            </MudStack>
+                        </MudMenuItem>
+
+                        <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/projects"))">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Folder" Size="Size.Small" />
+                                <MudText>Moje Projekty</MudText>
+                            </MudStack>
+                        </MudMenuItem>
+
+                        <MudDivider Class="my-0" />
+
+                        <MudMenuItem OnClick="@(() => NavigationManager.NavigateTo("/profile"))">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Small" />
+                                <MudText>Nastavení profilu</MudText>
+                            </MudStack>
+                        </MudMenuItem>
+
+                        <MudDivider Class="my-1" Style="border-width: 2px;" />
+
+                        @* Tlačítko odhlášení *@
+                        <MudMenuItem OnClick="@HandleLogout">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Logout" Size="Size.Small" />
+                                <MudText>Odhlásit se</MudText>
+                            </MudStack>
+                        </MudMenuItem>
+                    </MudStack>
+                </MudCard>
+            }
+        </ChildContent>
+    </MudMenu>
+</MudTooltip>
+
+@code {
+    // Stavové proměnné
+    private bool isAuthenticated;
+    private AppUser? currentUser;
+    private string? currentImageUrl;
+    private bool isLoading = true;
+    private bool imageWasLoadedInSession = false;
+
+    // Cache pro optimalizaci opakovaných kontrol
+    private DateTime _lastAuthCheck = DateTime.MinValue;
+    private bool? _cachedAuthResult = null;
+    private readonly TimeSpan _authCheckInterval = TimeSpan.FromSeconds(5);
+
+    // Inicializace při prvním načtení komponenty
+    // Tohle mi dalo zabrat, musí proběhnout rychle kvůli načítání UI
+    protected override async Task OnInitializedAsync()
+    {
+        Logger.LogInformation("Inicializace komponenty ProfileButton začala.");
+
+        // Registrace na eventy - aby componenta reagovala na změny ve službě
+        FirebaseAuthService.AuthenticationStateChanged += AuthenticationStateChanged;
+        FirebaseAuthService.ProfileImageChanged += OnProfileImageChanged;
+        FirebaseAuthService.UserProfileUpdated += OnUserProfileUpdated;
+
+        // Nejprve zkontrolujeme flag přihlášení a stav připojení
+        var quickCheck = await SecureStorage.GetAsync("user_logged_in");
+        bool isOfflineMode = !ConnectivityService.IsConnected;
+
+        Logger.LogInformation($"Hodnota 'user_logged_in' v SecureStorage: {quickCheck}, Offline režim: {isOfflineMode}");
+
+        if (quickCheck == "true")
+        {
+            isAuthenticated = true;
+            isLoading = true;
+            try
+            {
+                // Načteme uživatele z cache s obecným klíčem
+                Logger.LogInformation("Pokus o načtení uživatele z cache s obecným klíčem 'currentUser'");
+                var cachedUser = await CacheService.GetOrCreateAsync<AppUser>(
+                    "currentUser",
+                    () =>
+                    {
+                        Logger.LogWarning("Uživatel není v cache, vracím null.");
+                        return Task.FromResult<AppUser>(null!);
+                    },
+                    TimeSpan.FromHours(24));
+
+                if (cachedUser != null)
+                {
+                    Logger.LogInformation($"Načten uživatel z cache: {cachedUser.Email}");
+                    currentUser = cachedUser;
+
+                    // Načteme URL obrázku z cache
+                    string? imageUrl = await CacheService.GetOrCreateAsync<string?>(
+                        "currentUserImageUrl",
+                        () => Task.FromResult<string?>(null),
+                        TimeSpan.FromHours(24));
+
+                    // Zkontrolujeme, zda obrázek existuje
+                    bool imageExists = await CacheService.GetOrCreateAsync(
+                        "currentUserImageExists",
+                        () => Task.FromResult(false),
+                        TimeSpan.FromHours(24));
+
+                    if (!string.IsNullOrEmpty(imageUrl) && imageExists)
+                    {
+                        currentImageUrl = imageUrl;
+                        Logger.LogInformation($"Načten obrázek z cache: {imageUrl}");
+                    }
+
+                    // DŮLEŽITÉ: Tady vynutíme překreslení komponenty
+                    await InvokeAsync(StateHasChanged);
+                }
+                else
+                {
+                    Logger.LogWarning("Uživatel nebyl nalezen v cache.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Chyba při načítání z cache.");
+            }
+            finally
+            {
+                isLoading = false;
+                // vynutíme překreslení pro jistotu
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        else
+        {
+            Logger.LogWarning("Uživatel není přihlášen.");
+        }
+
+        // Spustíme kontrolu autentizace pouze jednou při inicializaci
+        // Task.Run aby neblokoval UI thread
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                Logger.LogInformation("Spouštím jednorázově CheckAuthenticationStatus na pozadí.");
+                await CheckAuthenticationStatus();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Chyba při kontrole autentizace na pozadí");
+            }
+        });
+
+        Logger.LogInformation("Inicializace komponenty ProfileButton dokončena.");
+    }
+
+    // Handler pro událost změny autentizace - volá se ze služby
+    private async void AuthenticationStateChanged(bool isAuthenticated)
+    {
+        if (isAuthenticated)
+        {
+            await CheckAuthenticationStatus();
+        }
+        else
+        {
+            // Reset při odhlášení
+            currentUser = null;
+            currentImageUrl = null;
+            this.isAuthenticated = false;
+        }
+
+        // Aktualizace UI
+        await InvokeAsync(() => StateHasChanged());
+    }
+
+    // Handler pro událost aktualizace profilu - volá se když se změní údaje uživatele
+    private async void OnUserProfileUpdated(AppUser updatedUser)
+    {
+        if (updatedUser != null)
+        {
+            // mažeme všechny cachované údaje o uživateli pomocí obecných klíčů
+            await CacheService.ClearAsync("currentUser");
+            await CacheService.ClearAsync("currentUserImageUrl");
+            await CacheService.ClearAsync("currentUserImageExists");
+
+            // Aktualizujeme lokální data
+            currentUser = updatedUser;
+
+            // Znovu načteme obrázek a aktualizujeme cache
+            if (!string.IsNullOrEmpty(updatedUser.ProfileImageUrl))
+            {
+                // Uložíme novou URL do cache
+                await CacheService.SetAsync("currentUserImageUrl", updatedUser.ProfileImageUrl, TimeSpan.FromHours(24));
+
+                // Zkontrolujeme existenci obrázku a uložíme do cache
+                bool exists = await FirebaseAuthService.DoesImageExistAsync(updatedUser.ProfileImageUrl);
+                await CacheService.SetAsync("currentUserImageExists", exists, TimeSpan.FromHours(24));
+
+                // Aktualizovat UI
+                currentImageUrl = exists ? updatedUser.ProfileImageUrl : null;
+            }
+            else
+            {
+                currentImageUrl = null;
+            }
+
+            // Aktualizujeme UI - stačí jednou
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // Handler pro událost změny profilového obrázku
+    private async void OnProfileImageChanged(string newImageUrl)
+    {
+        // Vymaže starou cache - používáme obecné klíče
+        await CacheService.ClearAsync("currentUserImageExists");
+        await CacheService.ClearAsync("currentUserImageUrl");
+
+        currentImageUrl = newImageUrl;
+
+        // Aktualizujeme UI - tohle muselo jít přes InvokeAsync, jinak občas havaruje
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // POMOCNÉ METODY PRO AUTENTIZACI
+    // Kontrola stavu autentizace - složitější kvůli offline režimu
+    private async Task CheckAuthenticationStatus()
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+
+            // Pokud jsme nedávno kontrolovali, použijeme cached výsledek
+            if (_cachedAuthResult.HasValue && (now - _lastAuthCheck) < _authCheckInterval)
+            {
+                Logger.LogInformation("ProfileButton: Používám cached výsledek autentizace");
+                isAuthenticated = _cachedAuthResult.Value;
+                return;
+            }
+
+            // Jinak provedeme skutečnou kontrolu
+            _lastAuthCheck = now;
+            bool wasLoading = isLoading;
+
+            if (!isAuthenticated)
+            {
+                isLoading = true;
+            }
+
+            isAuthenticated = await FirebaseAuthService.IsUserAuthenticated();
+            _cachedAuthResult = isAuthenticated;  // uložíme výsledek do cache
+
+            Logger.LogInformation($"ProfileButton: IsUserAuthenticated returned: {isAuthenticated}");
+
+            if (isAuthenticated)
+            {
+                // Načtení z cache nebo aktualizace cache s obecným klíčem
+                currentUser = await CacheService.GetOrCreateAsync(
+                    "currentUser", // Obecný klíč místo závislosti na userId
+                    () => FirebaseAuthService.GetCurrentUserAsync(),
+                    TimeSpan.FromHours(24));
+
+                Logger.LogInformation($"ProfileButton: Current User Email: {currentUser?.Email}");
+                await LoadProfileImageWithCache();
+            }
+            else
+            {
+                currentUser = null;
+                currentImageUrl = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"ProfileButton: Error checking authentication: {ex.Message}");
+
+            // V případě chyby v offline režimu, důvěřujeme lokálnímu stavu
+            if (!ConnectivityService.IsConnected)
+            {
+                var userLoggedIn = await SecureStorage.GetAsync("user_logged_in");
+                var offlineAuth = await SecureStorage.GetAsync("is_offline_authenticated");
+
+                if (userLoggedIn == "true" || offlineAuth == "true")
+                {
+                    isAuthenticated = true;
+                    _cachedAuthResult = true;
+                    Logger.LogInformation("ProfileButton: Používám offline autentizaci při chybě");
+                }
+                else
+                {
+                    isAuthenticated = false;
+                    _cachedAuthResult = false;
+                    currentImageUrl = null;
+                }
+            }
+            else
+            {
+                isAuthenticated = false;
+                _cachedAuthResult = false;
+                currentImageUrl = null;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            await InvokeAsync(StateHasChanged); 
+        }
+    }
+
+    // Načtení profilového obrázku - kontrola platnosti URL
+    private async Task LoadProfileImage()
+    {
+        if (currentUser != null && !string.IsNullOrWhiteSpace(currentUser.ProfileImageUrl) &&
+            Uri.IsWellFormedUriString(currentUser.ProfileImageUrl, UriKind.Absolute))
+        {
+            bool exists = await FirebaseAuthService.DoesImageExistAsync(currentUser.ProfileImageUrl);
+            currentImageUrl = exists ? currentUser.ProfileImageUrl : null;
+        }
+        else
+        {
+            currentImageUrl = null;
+        }
+    }
+
+    // Načtení profilového obrázku s využitím mezipaměti - optimalizace
+    private async Task LoadProfileImageWithCache()
+    {
+        if (currentUser != null && !string.IsNullOrWhiteSpace(currentUser.ProfileImageUrl) &&
+            Uri.IsWellFormedUriString(currentUser.ProfileImageUrl, UriKind.Absolute))
+        {
+            // Uložíme URL do cache
+            await CacheService.SetAsync(
+                "currentUserImageUrl",
+                currentUser.ProfileImageUrl,
+                TimeSpan.FromHours(24));
+
+            // Využíváme cache s obecným klíčem pro kontrolu existence obrázku
+            bool exists = await CacheService.GetOrCreateAsync(
+                "currentUserImageExists",
+                () => FirebaseAuthService.DoesImageExistAsync(currentUser.ProfileImageUrl),
+                TimeSpan.FromHours(24));
+
+            currentImageUrl = exists ? currentUser.ProfileImageUrl : null;
+        }
+        else
+        {
+            currentImageUrl = null;
+        }
+    }
+
+    // UI HANDLERY
+    // Reakce na kliknutí na profilovou ikonu - přihlášení nebo otevření menu
+    private void HandleProfileClick()
+    {
+        try
+        {
+            if (!isAuthenticated)
+            {
+                // Pokud není přihlášen, přesměrovat na login
+                NavigationManager.NavigateTo("/login");
+            }
+            // Když je přihlášen, otevře se menu automaticky díky MudMenu
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"Error in HandleProfileClick: {ex.Message}");
+            NotificationService.ShowToast("Došlo k chybě při zpracování požadavku.", NotificationType.Error);
+        }
+    }
+
+    // Zpracování odhlášení - podporuje online i offline režim
+    // Tohle je asi 1 ze složitých metod v celé aplikaci...
+    private async Task HandleLogout()
+    {
+        try
+        {
+            // Detekce offline režimu - musí fungovat i bez internetu
+            bool isConnected = ConnectivityService.IsConnected;
+            Logger.LogInformation($"HandleLogout: Stav připojení - {(isConnected ? "Online" : "Offline")}");
+
+            // Před odhlášením získáme ID uživatele pro vymazání cache
+            string? userId = FirebaseAuthService.GetCurrentUserId();
+
+            // Offline odhlášení - když není internet
+            if (!isConnected)
+            {
+                Logger.LogInformation("HandleLogout: Offline režim - provádím pouze lokální odhlášení");
+
+                // Vyčistíme všechny tokeny a příznaky
+                SecureStorage.Remove("firebase_token");
+                SecureStorage.Remove("refresh_token");
+                SecureStorage.Remove("user_logged_in");
+                SecureStorage.Remove("is_offline_authenticated");
+                SecureStorage.Remove("is_offline_mode");
+
+                // Vyčistíme cache
+                await CacheService.ClearAsync("currentUser");
+                await CacheService.ClearAsync("currentUserImageUrl");
+                await CacheService.ClearAsync("currentUserImageExists");
+
+                // Reset autentizačního stavu
+                isAuthenticated = false;
+                currentUser = null;
+                currentImageUrl = null;
+                StateHasChanged();
+
+                await NotificationService.ShowToastAfterForceLoadAsync("Odhlášení proběhlo úspěšně! (Offline režim)", NotificationType.Success);
+
+                NavigationManager.NavigateTo("/login", forceLoad: false);
+                return;
+            }
+
+            // Online odhlášení - standardní postup
+            var user = await FirebaseAuthService.GetCurrentUserAsync();
+
+            if (user == null || string.IsNullOrEmpty(user.DocumentId))
+            {
+                // Pokud selže, zkusíme obnovit session
+                await FirebaseAuthService.TryRestoreSessionAsync();
+
+                user = await FirebaseAuthService.GetCurrentUserAsync();
+
+                if (user == null || string.IsNullOrEmpty(user.DocumentId))
+                {
+                    Logger.LogInformation("HandleLogout: Není přihlášený uživatel");
+                    NotificationService.ShowToast("Odhlášení se nepodařilo: Nebyl nalezen žádný přihlášený uživatel.", NotificationType.Error);
+                    return;
+                }
+            }
+
+            Logger.LogInformation($"HandleLogout: Odhlašuji uživatele {user.DocumentId}");
+
+            // Bezpečná kontrola před odhlášením pro Firebase Auth na klientské straně
+            if (authClient != null && authClient.User != null)
+            {
+                authClient.SignOut();
+                Logger.LogInformation("Úspěšně odhlášeno z Firebase Auth klienta");
+            }
+            else
+            {
+                Logger.LogInformation("Nelze odhlásit z Firebase Auth - uživatel již není přihlášen na klientské straně");
+            }
+
+            // Odhlášení na straně serveru
+            var result = await FirebaseAuthService.LogoutAsync(user.DocumentId);
+            if (result)
+            {
+                // Odstranění tokenů ze SecureStorage
+                SecureStorage.Remove("firebase_token");
+                SecureStorage.Remove("refresh_token");
+                SecureStorage.Remove("user_logged_in");
+                SecureStorage.Remove("is_offline_authenticated");
+                SecureStorage.Remove("is_offline_mode");
+
+                // vymazání cache před resetem stavů
+                // Vymaže uživatelská data z obou cache (RAM i disk)
+                await CacheService.ClearAsync("currentUser");
+                await CacheService.ClearAsync("currentUserImageUrl");
+                await CacheService.ClearAsync("currentUserImageExists");
+
+                // Reset autentizačního stavu
+                isAuthenticated = false;
+                currentUser = null;
+                currentImageUrl = null;
+                StateHasChanged();
+
+                Logger.LogInformation("HandleLogout: Stavy resetovány");
+
+                // Uložit záznam o odhlášení do historie (pouze v online režimu)
+                await NotificationService.AddNotificationAsync(new NotificationItem
+                    {
+                        Message = "Byli jste úspěšně odhlášeni",
+                        Type = NotificationType.Success,
+                        Category = NotificationCategory.System,
+                        Title = "Bezpečnostní událost"
+                    }, showAfterForceLoad: true);
+
+                // Přesměrování na login stránku po ručním odhlášení
+                Logger.LogInformation("HandleLogout: Přesměrovávám na login");
+                NavigationManager.NavigateTo("/login", forceLoad: false);
+            }
+            else
+            {
+                Logger.LogError("HandleLogout: Odhlášení selhalo");
+                NotificationService.ShowToast("Odhlášení se nezdařilo. Zkuste to prosím znovu.", NotificationType.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"HandleLogout: Chyba - {ex.Message}");
+            NotificationService.ShowToast($"Chyba při odhlašování: {ex.Message}", NotificationType.Error);
+        }
+    }
+
+    // UVOLNĚNÍ ZDROJŮ
+    // Uvolní zdroje komponenty - odregistruje event handlery pro předejití memory leaků
+    public void Dispose()
+    {
+        FirebaseAuthService.AuthenticationStateChanged -= AuthenticationStateChanged;
+        FirebaseAuthService.ProfileImageChanged -= OnProfileImageChanged;
+        FirebaseAuthService.UserProfileUpdated -= OnUserProfileUpdated;
+    }
+}
+
+
+

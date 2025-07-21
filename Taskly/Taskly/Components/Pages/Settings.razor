@@ -1,0 +1,580 @@
+﻿@* Namespace a importy *@
+@page "/settings"
+@using Taskly.Services.UI
+@using Taskly.LocalStorage
+@using Taskly.Services.Tasks
+@using Taskly.Services.Projects
+@using Taskly.Services.Notification
+@using Plugin.LocalNotification 
+@using Plugin.LocalNotification.AndroidOption 
+
+@* Služby pro DI *@
+@inject ISnackbar Snackbar
+@inject IAuthService AuthService
+@inject ConnectivityService ConnectivityService
+@inject IThemeService ThemeService
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject ILogger<Settings> Logger
+@inject LiteDbConfig LiteDbConfig
+@inject ITaskService TaskService
+@inject IProjectService ProjectService
+@inject Taskly.Services.Notification.INotificationService NotificationService 
+
+<div>
+    @* Hlavní kontejner stránky nastavení *@
+    <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+        <MudPaper Elevation="2" Class="pa-6 settings-page-container">
+
+            @* Hlavička stránky s ikonou, nadpisy a akčními prvky *@
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="3" Class="mb-4">
+                        @* Ikona stránky nastavení *@
+                        <div class="settings-header-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.Settings" Size="Size.Large" Color="Color.Primary" />
+                        </div>
+
+                        @* Hlavní nadpisy a popis stránky *@
+                        <div>
+                            <MudText Typo="Typo.h4" Class="settings-page-title">Nastavení aplikace</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="settings-page-subtitle">
+                                Přizpůsobte si aplikaci podle svých potřeb
+                            </MudText>
+                        </div>
+                        <MudSpacer />
+
+                        @* Stavové indikátory a akční tlačítka *@
+                        <div class="settings-header-actions">
+                            @* Zde mohou být další akční prvky v budoucnu *@
+                        </div>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+
+            @* Hlavní obsah s kartami nastavení *@
+            <MudTabs Elevation="0"
+                     Rounded="true"
+                     ApplyEffectsToContainer="true"
+                     PanelClass="pa-2 pa-sm-4"
+                     Position="Position.Top"
+                     SliderColor="Color.Primary"
+                     AlwaysShowScrollButtons="true"
+                     Class="settings-tabs-container">
+
+                @* Karta nastavení vzhledu aplikace *@
+                <MudTabPanel Text="Vzhled" Icon="@Icons.Material.Filled.Palette">
+                    <MudGrid Spacing="1" Class="mud-grid-spacing-sm-2 settings-appearance-grid">
+                        @* Karta pro základní vzhled *@
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudCard Elevation="2" Class="pa-2 pa-sm-4 mb-2 mud-height-full settings-appearance-card">
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6" Class="settings-card-title">Základní vzhled</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudSwitch T="bool" @bind-Value="isDarkMode" Color="Color.Primary" Label="Tmavý režim" Class="settings-switch" />
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+
+                        @* Karta pro barevné schéma *@
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudCard Elevation="2" Class="pa-2 pa-sm-4 mb-2 mud-height-full settings-theme-card">
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6" Class="settings-card-title">Barevné schéma</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudSelect T="string" @bind-Value="selectedThemeColor" Label="Primární barva"
+                                               Variant="Variant.Outlined" Class="mt-1 settings-color-select" Dense="true">
+                                        <MudSelectItem Value="@("primary")">Výchozí</MudSelectItem>
+                                        <MudSelectItem Value="@("indigo")">Indigo</MudSelectItem>
+                                        <MudSelectItem Value="@("purple")">Fialová</MudSelectItem>
+                                        <MudSelectItem Value="@("teal")">Tyrkysová</MudSelectItem>
+                                        <MudSelectItem Value="@("orange")">Oranžová</MudSelectItem>
+                                    </MudSelect>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+
+                        @* Karta pro hustotu zobrazení *@
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudCard Elevation="2" Class="pa-2 pa-sm-4 mb-2 mud-height-full settings-density-card">
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6" Class="settings-card-title">Hustota zobrazení</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudSelect T="string" @bind-Value="selectedDensity" Label="Hustota zobrazení"
+                                               Variant="Variant.Outlined" Class="mt-1 settings-density-select" Dense="true">
+                                        <MudSelectItem Value="@("default")">Výchozí</MudSelectItem>
+                                        <MudSelectItem Value="@("comfortable")">Pohodlné</MudSelectItem>
+                                        <MudSelectItem Value="@("compact")">Kompaktní</MudSelectItem>
+                                    </MudSelect>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+
+                        @* Tlačítko pro uložení nastavení vzhledu *@
+                        <MudItem xs="12" Class="d-flex justify-center justify-sm-end mt-2">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveThemeSettings"
+                                       Size="Size.Medium" Class="px-2 px-sm-4 settings-save-appearance-button">
+                                Uložit nastavení vzhledu
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+
+                @* Karta nastavení aplikace *@
+                <MudTabPanel Text="Aplikace" Icon="@Icons.Material.Filled.Settings">
+                    <MudGrid Spacing="1" Class="mud-grid-spacing-sm-2 settings-app-grid">
+                        @* Karta pro synchronizaci *@
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudCard Elevation="2" Class="pa-2 pa-sm-4 mb-2 mud-height-full settings-sync-card">
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6" Class="settings-card-title">Synchronizace</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudSwitch T="bool" @bind-Value="autoSyncOnConnect" Color="Color.Primary"
+                                               Label="Automatická synchronizace při obnovení připojení"
+                                               LabelPosition="LabelPosition.End" Class="settings-switch" />
+
+                                    <MudStack Row="true" Justify="Justify.Center" Class="mt-2">
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                                   OnClick="SynchronizeNow" Disabled="@(!ConnectivityService.IsConnected || isSynchronizing)"
+                                                   StartIcon="@Icons.Material.Filled.Sync" Size="Size.Small" Class="settings-sync-now-button">
+                                            @(isSynchronizing ? "Synchronizace..." : "SYNCHRONIZOVAT NYNÍ")
+                                        </MudButton>
+                                    </MudStack>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+
+                        @* Karta pro notifikace *@
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudCard Elevation="2" Class="pa-2 pa-sm-4 mb-2 mud-height-full settings-notifications-card">
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6" Class="settings-card-title">Notifikace</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudSwitch T="bool" @bind-Value="masterNotificationsEnabled" Color="Color.Primary"
+                                               Label="Povolit všechny notifikace (Hlavní vypínač)" Class="settings-switch" />
+
+                                    <MudSwitch T="bool" @bind-Value="localNotificationsEnabled" Color="Color.Primary"
+                                               Label="Povolit lokální (systémové) notifikace"
+                                               Disabled="@(!masterNotificationsEnabled)" Class="mt-1 settings-switch" />
+
+                                    <MudSwitch T="bool" @bind-Value="reminderNotificationsEnabled" Color="Color.Primary"
+                                               Label="Povolit upozornění na termíny (v aplikaci)"
+                                               Disabled="@(!masterNotificationsEnabled)" Class="mt-1 settings-switch" />
+
+                                    <MudText Typo="Typo.caption" Class="mt-2 mud-text-secondary settings-notifications-help">
+                                        Upozornění přicházejí 1 den, 2 hodiny a 30 minut před termínem.
+                                    </MudText>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+
+                        @* Karta pro výchozí filtr úkolů *@
+                        <MudItem xs="12" sm="6" md="4">
+                            <MudCard Elevation="2" Class="pa-2 pa-sm-4 mb-2 mud-height-full settings-default-filter-card">
+                                <MudCardHeader>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6" Class="settings-card-title">Výchozí filtr úkolů</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+                                <MudCardContent>
+                                    <MudSelect T="string" @bind-Value="defaultTaskView" Label="Výchozí zobrazení"
+                                               Variant="Variant.Outlined" Dense="true" Class="settings-default-view-select">
+                                        <MudSelectItem Value="@("all")">Všechny úkoly</MudSelectItem>
+                                        <MudSelectItem Value="@(nameof(TaskItemStatus.New))">Nové</MudSelectItem>
+                                        <MudSelectItem Value="@(nameof(TaskItemStatus.InProgress))">Rozpracované</MudSelectItem>
+                                        <MudSelectItem Value="@(nameof(TaskItemStatus.Completed))">Dokončené</MudSelectItem>
+                                    </MudSelect>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+
+                        @* Tlačítko pro uložení nastavení aplikace *@
+                        <MudItem xs="12" Class="d-flex justify-center justify-sm-end mt-2">
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAppSettings"
+                                       Size="Size.Medium" Class="px-2 px-sm-4 settings-save-app-button">
+                                Uložit nastavení aplikace
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+
+                @* Karta pokročilých nastavení *@
+                <MudTabPanel Text="Pokročilé" Icon="@Icons.Material.Filled.BuildCircle">
+                    <MudCard Elevation="2" Class="pa-2 pa-sm-4 mb-2 settings-advanced-card">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6" Class="settings-card-title">Správa dat</MudText>
+                            </CardHeaderContent>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudText Class="mb-2 settings-data-description" Style="word-wrap: break-word;">
+                                Zde můžete vymazat lokálně uložená data z tohoto zařízení. Po přihlášení se data ze serveru znovu synchronizují.
+                            </MudText>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Error" OnClick="OpenClearDataDialog"
+                                       StartIcon="@Icons.Material.Filled.DeleteSweep" Size="Size.Small" Class="settings-clear-data-button">
+                                Vymazat lokální data
+                            </MudButton>
+                        </MudCardContent>
+                    </MudCard>
+                </MudTabPanel>
+
+                @* Karta o aplikaci *@
+                <MudTabPanel Text="O aplikaci" Icon="@Icons.Material.Filled.Info">
+                    <MudCard Elevation="2" Class="pa-2 pa-sm-4 mb-2 settings-about-card">
+                        <MudCardContent>
+                            <MudStack AlignItems="AlignItems.Center" Spacing="2" Class="settings-about-content">
+                                @* Logo aplikace *@
+                                <MudImage Src="images/taskly_logo.png"
+                                          Alt="Taskly Logo"
+                                          Width="80"
+                                          Height="80"
+                                          Style="border-radius: 8px;"
+                                          Class="settings-app-logo" />
+
+                                @* Název a verze aplikace *@
+                                <MudText Typo="Typo.h6" Align="Align.Center" Class="settings-app-name">
+                                    <b>Taskly</b> - Aplikace pro správu úkolů
+                                </MudText>
+
+                                @* Technické informace *@
+                                <MudStack Spacing="1" AlignItems="AlignItems.Center" Class="settings-tech-specs">
+                                    <MudText Typo="Typo.body1" Class="settings-version">Verze: 1.0.0</MudText>
+                                    <MudText Typo="Typo.body2" Class="settings-framework">Framework: .NET MAUI + Blazor Hybrid</MudText>
+                                    <MudText Typo="Typo.body2" Class="settings-ui-library">UI: MudBlazor 7.15.0</MudText>
+                                    <MudText Typo="Typo.body2" Class="settings-cloud-services">Cloud služby: Firebase (Firestore, Storage, Auth)</MudText>
+                                    <MudText Typo="Typo.body2" Class="settings-local-db">Lokální databáze: LiteDB</MudText>
+                                    <MudText Typo="Typo.body2" Class="settings-platforms">Platformy: Windows, Android</MudText>
+                                </MudStack>
+
+                                <MudDivider Class="my-2 width-100 settings-divider" />
+
+                                @* Copyright *@
+                                <MudText Typo="Typo.body2" Class="settings-copyright">
+                                    © 2025 Daniel Maňák - Všechna práva vyhrazena
+                                </MudText>
+                            </MudStack>
+                        </MudCardContent>
+                    </MudCard>
+                </MudTabPanel>
+            </MudTabs>
+        </MudPaper>
+    </MudContainer>
+</div>
+
+@code {
+    // PROMĚNNÉ A VLASTNOSTI
+    // Nastavení vzhledu
+    private bool isDarkMode;
+    private string selectedThemeColor = "primary";
+    private string selectedDensity = "default";
+
+    // Nastavení synchronizace
+    private bool autoSyncOnConnect = true;
+    private string defaultTaskView = "all";
+    private bool isSynchronizing = false;
+
+    // Nastavení notifikací
+    private bool masterNotificationsEnabled = true;
+    private bool localNotificationsEnabled = false;
+    private bool reminderNotificationsEnabled = true;
+
+    // Konstanty pro uložení preferencí
+    private const string AUTO_SYNC_KEY = "app_auto_sync";
+    private const string DEFAULT_VIEW_KEY = "app_default_view";
+    private const string MASTER_NOTIFICATIONS_KEY = "app_notifications_enabled"; // Hlavní vypínač
+    private const string LOCAL_NOTIFICATIONS_KEY = "app_local_notifications_enabled"; // Pro systémové lokální notifikace
+    private const string REMINDER_NOTIFICATIONS_KEY = "app_reminder_notifications_enabled";
+
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    // Inicializace komponenty - načtení dat a přihlášení k událostem
+    protected override async Task OnInitializedAsync()
+    {
+        Logger.LogInformation("OnInitializedAsync začíná");
+
+        // Nejprve inicializujeme ThemeService
+        await ThemeService.InitializeAsync();
+
+        // Načteme hodnoty ze služby
+        isDarkMode = ThemeService.IsDarkMode;
+        selectedThemeColor = ThemeService.PrimaryColor;
+        selectedDensity = ThemeService.Density; // Načtení hustoty
+
+        Logger.LogInformation($"Načteno z ThemeService - IsDarkMode: {isDarkMode}, PrimaryColor: {selectedThemeColor}");
+
+        // Registrujeme se k událostem pro změny témat
+        ThemeService.DarkModeChanged += OnDarkModeChanged;
+        ThemeService.DensityChanged += OnDensityChanged; // Registrace události pro hustotu
+
+        // Načteme další nastavení aplikace
+        LoadAppSettings();
+
+        Logger.LogInformation("OnInitializedAsync dokončeno");
+    }
+
+    // EVENT HANDLERY
+    // Zpracování událostí změny dark módu z ThemeService
+    private void OnDarkModeChanged(bool newValue)
+    {
+        Logger.LogInformation($"ThemeService oznámil změnu dark mode na: {newValue}");
+        isDarkMode = newValue;
+        StateHasChanged();
+    }
+
+    // Zpracování události změny hustoty UI z ThemeService
+    private void OnDensityChanged(string newDensity)
+    {
+        selectedDensity = newDensity;
+        StateHasChanged();
+    }
+
+    // Zpracování změny dark módu z UI komponenty
+    private void UpdateDarkMode(bool newValue)
+    {
+        Logger.LogInformation($"MudSwitch změnil hodnotu na: {newValue}");
+        isDarkMode = newValue;
+        StateHasChanged();
+    }
+
+    // NAČÍTÁNÍ DAT
+    // Načtení nastavení aplikace z Preferences
+    private void LoadAppSettings()
+    {
+        Logger.LogInformation("LoadSettings začíná");
+
+        try
+        {
+            // Načteme hodnoty z Preferences API
+            autoSyncOnConnect = Preferences.Default.Get(AUTO_SYNC_KEY, true);
+            defaultTaskView = Preferences.Default.Get(DEFAULT_VIEW_KEY, "all");
+
+            // Načteme nastavení notifikací s jasnými klíči
+            masterNotificationsEnabled = Preferences.Default.Get(MASTER_NOTIFICATIONS_KEY, true);
+            localNotificationsEnabled = Preferences.Default.Get(LOCAL_NOTIFICATIONS_KEY, false); // Výchozí false
+            reminderNotificationsEnabled = Preferences.Default.Get(REMINDER_NOTIFICATIONS_KEY, true);
+
+            Logger.LogInformation("LoadAppSettings dokončeno");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Chyba při načítání nastavení");
+        }
+    }
+
+    // UI AKCE
+    // Uložení nastavení vzhledu
+    private async Task SaveThemeSettings()
+    {
+        bool currentValue = isDarkMode;  // Uložíme lokální kopii hodnoty
+        Logger.LogInformation($"SaveThemeSettings - Lokální kopie isDarkMode: {currentValue}");
+
+        try
+        {
+            // Použijeme lokální kopii hodnoty
+            await ThemeService.SetDarkModeAsync(currentValue);
+            await ThemeService.SetPrimaryColorAsync(selectedThemeColor);
+            await ThemeService.SetDensityAsync(selectedDensity); // Uložení hustoty
+
+            Logger.LogInformation($"Po uložení - ThemeService.IsDarkMode: {ThemeService.IsDarkMode}");
+
+            NotificationService.ShowToast("Nastavení vzhledu bylo uloženo", NotificationType.Success);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Chyba při ukládání nastavení vzhledu");
+            NotificationService.ShowToast($"Chyba: {ex.Message}", NotificationType.Error);
+        }
+    }
+
+    // Uložení aplikačních nastavení
+    private Task SaveAppSettings()
+    {
+        Logger.LogInformation("SaveAppSettings začíná");
+
+        try
+        {
+            // Uložíme hodnoty do Preferences API
+            Preferences.Default.Set(AUTO_SYNC_KEY, autoSyncOnConnect);
+            Preferences.Default.Set(DEFAULT_VIEW_KEY, defaultTaskView);
+
+            // Uložíme nastavení notifikací
+            Preferences.Default.Set(MASTER_NOTIFICATIONS_KEY, masterNotificationsEnabled);
+            Preferences.Default.Set(LOCAL_NOTIFICATIONS_KEY, localNotificationsEnabled);
+            Preferences.Default.Set(REMINDER_NOTIFICATIONS_KEY, reminderNotificationsEnabled);
+
+            Logger.LogInformation("SaveAppSettings dokončeno");
+
+            NotificationService.ShowToast("Nastavení byla uložena", NotificationType.Success);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Chyba při ukládání nastavení");
+            NotificationService.ShowToast($"Chyba: {ex.Message}", NotificationType.Error);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    // Okamžitá synchronizace všech dat
+    private async Task SynchronizeNow()
+    {
+        if (!ConnectivityService.IsConnected)
+        {
+            NotificationService.ShowToast("Nelze synchronizovat - nejste připojeni k internetu", NotificationType.Warning);
+            return;
+        }
+
+        if (!await AuthService.IsUserAuthenticated())
+        {
+            NotificationService.ShowToast("Pro synchronizaci se prosím přihlaste", NotificationType.Warning);
+            return;
+        }
+
+        isSynchronizing = true;
+        try
+        {
+            // Zobrazíme perzistentní toast během synchronizace
+            NotificationService.ShowPersistentToast("Probíhá synchronizace...", NotificationType.Info);
+
+            // Provedeme synchronizaci úkolů a projektů
+            await TaskService.SynchronizeTasksOnConnectionRestoredAsync();
+            await ProjectService.SynchronizeProjectsOnConnectionRestoredAsync();
+
+            // Odstraníme toast pro synchronizaci
+            NotificationService.RemovePersistentToast();
+
+            // Přidáme notifikaci do historie
+            await NotificationService.AddNotificationAsync(new NotificationItem
+                {
+                    Message = "Globální synchronizace byla úspěšně dokončena",
+                    Type = NotificationType.Success,
+                    Category = Models.NotificationCategory.System,
+                    Title = "Synchronizace"
+                });
+        }
+        catch (Exception ex)
+        {
+            // V případě chyby odstraníme toast a zobrazíme chybovou zprávu
+            NotificationService.RemovePersistentToast();
+            NotificationService.ShowToast($"Chyba při synchronizaci: {ex.Message}", NotificationType.Error);
+        }
+        finally
+        {
+            isSynchronizing = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    // Otevření dialogu pro vymazání dat
+    private async Task OpenClearDataDialog()
+    {
+        bool? result = await DialogService.ShowMessageBox(
+            "Vymazat lokální data",
+             "Opravdu chcete smazat VŠECHNA lokální data (úkoly, projekty atd.) a nastavení z tohoto zařízení? Tato akce nelze vzít zpět a může vyžadovat restart aplikace pro plné projevení.",
+            yesText: "Ano, smazat vše",
+            cancelText: "Zrušit"
+        );
+
+        if (result == true)
+        {
+            await ClearLocalData();
+        }
+    }
+
+    // Vymazání všech lokálních dat aplikace
+    private async Task ClearLocalData()
+    {
+        // Zobrazíme perzistentní toast před zahájením mazání
+        NotificationService.ShowPersistentToast("Probíhá mazání lokálních dat...", NotificationType.Info);
+
+        try
+        {
+            Logger.LogWarning("Spouštíme proces mazání lokálních dat, cache a nastavení...");
+
+            // 1. Smažeme soubor LiteDB
+            bool dbWiped = await Task.Run(() => LiteDbConfig.WipeDatabaseFile());
+            if (!dbWiped)
+            {
+                Logger.LogError("Nepodařilo se smazat soubor lokální databáze!");
+                NotificationService.ShowToast("Chyba: Nepodařilo se smazat soubor databáze!", NotificationType.Error);
+                // I přes chybu budeme pokračovat s mazáním zbytku
+            }
+            else
+            {
+                Logger.LogInformation("Soubor lokální databáze úspěšně smazán.");
+            }
+
+            // 2. Vymažeme cache ve službách
+            try
+            {
+                TaskService.ClearCache();
+                ProjectService.ClearCache();
+                NotificationService.ClearCache();
+                Logger.LogInformation("In-memory cache služeb vymazána.");
+            }
+            catch (Exception cacheEx)
+            {
+                Logger.LogError(cacheEx, "Chyba při mazání cache služeb.");
+                NotificationService.ShowToast("Chyba při mazání interní cache.", NotificationType.Warning);
+            }
+
+            // 3. Vymažeme všechna nastavení z Preferences
+            Preferences.Default.Clear();
+            Logger.LogInformation("Preferences vymazány.");
+
+            // 4. Resetujeme ThemeService
+            await ThemeService.InitializeAsync();
+            Logger.LogInformation("ThemeService reinicializován.");
+
+            // 5. Aktualizujeme lokální proměnné v Settings.razor
+            isDarkMode = ThemeService.IsDarkMode;
+            selectedThemeColor = ThemeService.PrimaryColor;
+            selectedDensity = ThemeService.Density;
+            LoadAppSettings();
+            Logger.LogInformation("Nastavení v Settings.razor resetována na výchozí.");
+
+            // 6. Signalizujeme změny
+            TaskService.RaiseTasksChangedEvent();
+            ProjectService.RaiseProjectsChangedEvent();
+            // NotificationService.ClearCache() už vyvolal OnNotificationsChanged
+
+            // Odstraníme perzistentní toast a zobrazíme finální zprávu
+            NotificationService.RemovePersistentToast();
+            NotificationService.ShowToast("Lokální data, cache a nastavení byla vymazána. Restartujte aplikaci.", NotificationType.Success);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Chyba při mazání lokálních dat a nastavení");
+            NotificationService.RemovePersistentToast(); // Odstranit i při chybě
+            NotificationService.ShowToast($"Chyba při mazání dat: {ex.Message}", NotificationType.Error);
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged); // Aktualizujeme UI stránky Nastavení
+        }
+    }
+
+    // UVOLNĚNÍ ZDROJŮ
+    // Uvolní zdroje komponenty - odregistruje event handlery pro předejití memory leaků
+    public void Dispose()
+    {
+        // Odhlásíme se od všech událostí
+        ThemeService.DarkModeChanged -= OnDarkModeChanged;
+        ThemeService.DensityChanged -= OnDensityChanged;
+    }
+}
+

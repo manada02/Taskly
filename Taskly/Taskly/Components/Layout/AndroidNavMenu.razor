@@ -1,0 +1,95 @@
+﻿@* Potřebné namespace *@
+@using MudBlazor
+@using Microsoft.Maui.Devices
+@using Microsoft.Extensions.Logging
+
+@* Služby pro DI *@
+@inject NavigationManager NavigationManager
+@inject ILogger<AndroidNavMenu> Logger
+
+<div>
+    <MudNavMenu Class="task-management-nav-menu">
+
+        @* Domovská stránka *@
+        <MudNavLink Icon="@Icons.Material.Filled.Home"
+                   OnClick="@(() => NavigateAndCloseMenu("/"))"
+                   Match="NavLinkMatch.All" 
+                   Class="@(CurrentPath == "/" ? "mud-selected-item" : "")">
+            Domů
+        </MudNavLink>
+
+        @* Úkoly *@
+        <MudNavGroup Title="Úkoly" Icon="@Icons.Material.Filled.TaskAlt" 
+                    Expanded="true">
+
+            <MudNavLink Icon="@Icons.Material.Filled.TaskAlt"
+                       OnClick="@(() => NavigateAndCloseMenu("/tasks"))"
+                       Class="@(CurrentPath == "/tasks" ? "mud-selected-item" : "")">
+                Všechny úkoly
+            </MudNavLink>
+            <MudNavLink Icon="@Icons.Material.Filled.Add"
+                        OnClick="@(() => NavigateAndCloseMenu("/tasks?action=new"))"
+                        Class="@(CurrentPath.Contains("action=new") ? "mud-selected-item" : "")">
+                Nový úkol
+            </MudNavLink>
+            <MudNavLink Icon="@Icons.Material.Filled.CheckCircle"
+                        OnClick="@(() => NavigateAndCloseMenu("/completed-tasks"))"
+                        Class="@(CurrentPath == "/completed-tasks" ? "mud-selected-item" : "")">
+                Dokončené úkoly
+            </MudNavLink>
+        </MudNavGroup>
+
+        @* Projekty *@
+        <MudNavGroup Title="Projekty" Icon="@Icons.Material.Filled.WorkOutline" 
+                    Expanded="true">
+
+            <MudNavLink Icon="@Icons.Material.Filled.Folder"
+                       OnClick="@(() => NavigateAndCloseMenu("/projects"))"
+                       Class="@(CurrentPath == "/projects" && !CurrentPath.Contains("action=new") ? "mud-selected-item" : "")">
+                Všechny projekty
+            </MudNavLink>
+            <MudNavLink Icon="@Icons.Material.Filled.CreateNewFolder"
+                       OnClick="@(() => NavigateAndCloseMenu("/projects?action=new"))"
+                       Class="@(CurrentPath.Contains("action=new") ? "mud-selected-item" : "")">
+                Nový projekt
+            </MudNavLink>
+        </MudNavGroup>
+
+        @* Statistiky *@
+        <MudNavLink Icon="@Icons.Material.Filled.BarChart"
+                   OnClick="@(() => NavigateAndCloseMenu("/statistics"))"
+                   Class="@(CurrentPath.StartsWith("/statistics") ? "mud-selected-item" : "")">
+            Statistiky
+        </MudNavLink>
+
+        @* Nastavení *@
+        <MudNavLink Icon="@Icons.Material.Filled.Settings"
+                   OnClick="@(() => NavigateAndCloseMenu("/settings"))"
+                   Class="@(CurrentPath.StartsWith("/settings") ? "mud-selected-item" : "")">
+            Nastavení
+        </MudNavLink>
+    </MudNavMenu>
+</div>
+
+@code {
+    // PARAMETRY
+    // Aktuální cesta - používáme pro zvýraznění aktivních položek menu
+    [Parameter]
+    public string CurrentPath { get; set; } = "/";
+
+    // Událost pro informování rodičovské komponenty o zavření menu
+    [Parameter]
+    public EventCallback<bool> OnMenuClose { get; set; }
+
+    // Metoda pro navigaci s automatickým zavřením menu
+    // toto je důležité pro UX - nejdřív zavřeme menu, pak navigujeme
+    private async Task NavigateAndCloseMenu(string url)
+    {
+        // Nejprve zavřeme menu - použijeme callback do rodičovské komponenty
+        await OnMenuClose.InvokeAsync(false);
+
+        // Potom navigujeme na cílovou URL - tohle aktualizuje obsah stránky
+        NavigationManager.NavigateTo(url);
+    }
+}
+

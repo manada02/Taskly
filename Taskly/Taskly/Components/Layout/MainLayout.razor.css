@@ -1,0 +1,28 @@
+
+::deep .task-management-app-bar {
+    height: 66px; 
+}
+
+
+::deep .task-management-drawer {
+    border-right: 1px solid rgba(0, 0, 0, 0.12);
+    width: 250px; 
+}
+
+
+::deep .mud-theme-dark .task-management-drawer {
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+
+::deep .task-management-main-content {
+    height: calc(100vh - 66px); 
+  
+}
+
+
+@media (min-width: 600px) {
+    ::deep .task-management-main-content .pa-6 {
+        padding: 24px !important; 
+    }
+}

@@ -1,0 +1,117 @@
+﻿@* Potřebné namespace *@
+@using Taskly.Services.Tasks
+@using Taskly.Services.Projects
+@using Taskly.Services.Auth
+
+@* Služby pro DI *@
+@inject ITaskService TaskService
+@inject IProjectService ProjectService
+@inject TaskReminderService ReminderService
+@inject IAuthService AuthService
+@inject ConnectivityService ConnectivityService
+@inject ILogger<TaskInitializer> Logger
+
+@* Prázdný element - komponenta nemá UI, pouze inicializuje a synchronizuje data úkolů a projektů při startu aplikace *@
+<div></div>
+
+@code {
+    // STATICKÉ PROMĚNNÉ
+    // Tyto proměnné používáme pro sdílení stavu inicializace napříč aplikací
+    public static bool IsInitialized { get; private set; } = false;
+    public static int PendingSyncCount { get; private set; } = 0;
+    public static event Action? OnInitializationCompleted;
+
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    // Inicializace aplikačních dat - tohle se spustí při startu aplikace
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // SYNCHRONIZACE DAT
+            // Počkáme, až bude autentizace kompletní - autentizace běží paralelně
+            await Task.Delay(1000); // Krátké zpoždění pro dokončení autentizace
+
+            // Načteme nastavení automatické synchronizace - uživatel si může vypnout auto-sync
+            bool autoSync = Preferences.Default.Get("app_auto_sync", true);
+
+            // Zkontrolujeme podmínky pro synchronizaci:
+            // 1. Jsme online
+            // 2. Uživatel je přihlášen
+            // 3. Automatická synchronizace je povolena
+            if (ConnectivityService.IsConnected && await AuthService.IsUserAuthenticated())
+            {
+                if (autoSync)
+                {
+                    Logger.LogInformation("TaskInitializer: Spouštíme synchronizaci při inicializaci aplikace");
+
+                    // Načteme všechny úkoly a vyfiltrujeme ty, které potřebují synchronizaci
+                    var tasks = await TaskService.GetTasksAsync();
+                    var tasksToSync = tasks.Where(t => t.NeedsSynchronization).ToList();
+
+                    if (tasksToSync.Count > 0)
+                    {
+                        Logger.LogInformation($"TaskInitializer: Nalezeno {tasksToSync.Count} úkolů k synchronizaci");
+
+                        // Synchronizujeme úkoly s backendem - tohle volá API
+                        await TaskService.SynchronizeTasksOnConnectionRestoredAsync();
+
+                        // Explicitně resetujeme příznaky synchronizace - pojistka proti problémům se cache
+                        foreach (var task in tasksToSync)
+                        {
+                            Logger.LogInformation($"TaskInitializer: Manuální reset příznaku pro {task.Id}");
+                            task.NeedsSynchronization = false;
+                            await TaskService.UpdateTaskAsync(task);
+                        }
+
+                        // Vynutíme aktualizaci cache - musíme si být jistí, že máme aktuální data
+                        Logger.LogInformation("TaskInitializer: Resetujeme cache po synchronizaci");
+                        await TaskService.PreloadAllTasksAsync();
+
+                        // Explicitně vyvoláme událost změny úkolů - aby se aktualizovalo UI
+                        TaskService.RaiseTasksChangedEvent();
+                    }
+                }
+                else
+                {
+                    Logger.LogInformation("TaskInitializer: Automatická synchronizace je vypnuta, přeskakujeme synchronizaci při inicializaci");
+
+                    // Jen zjistíme počet nesynchronizovaných úkolů pro informaci
+                    var tasks = await TaskService.GetTasksAsync();
+                    var pendingTasks = tasks.Where(t => t.NeedsSynchronization).ToList();
+
+                    if (pendingTasks.Count > 0)
+                    {
+                        Logger.LogInformation($"TaskInitializer: Nalezeno {pendingTasks.Count} úkolů čekajících na ruční synchronizaci");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "TaskInitializer: Chyba při synchronizaci");
+        }
+
+        // PŘEDBĚŽNÉ NAČTENÍ DAT
+        // Předběžně načteme úkoly - abychom je měli hned k dispozici a urychlili zobrazení
+        await TaskService.PreloadAllTasksAsync();
+
+        // Předběžně načteme projekty - potřebujeme je pro filtrování úkolů podle projektů
+        await ProjectService.PreloadAllProjectsAsync();
+
+        // DOKONČENÍ INICIALIZACE
+        // Aktualizujeme statický počet čekajících úkolů - pro zobrazení v UI
+        var finalTasks = await TaskService.GetTasksAsync();
+        PendingSyncCount = finalTasks.Count(t => t.NeedsSynchronization);
+
+        // Označíme inicializaci jako dokončenou - pro zbytek aplikace
+        IsInitialized = true;
+
+        // Krátká pauza, aby ostatní komponenty měly čas se připravit
+        await Task.Delay(100);
+
+        // Vyvoláme událost dokončení inicializace - ostatní komponenty čekají na tuto událost
+        OnInitializationCompleted?.Invoke();
+
+        Logger.LogInformation($"TaskInitializer: Data předběžně načtena, inicializace dokončena. PendingSyncCount={PendingSyncCount}");
+    }
+}

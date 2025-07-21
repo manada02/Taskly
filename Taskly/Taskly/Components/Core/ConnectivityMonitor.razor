@@ -1,0 +1,170 @@
+﻿@* Služby pro DI *@
+@inject ILogger<ConnectivityMonitor> Logger
+@inject ConnectivityService ConnectivityService
+@inject INotificationService NotificationService
+@inject IAuthService FirebaseAuthService
+@implements IDisposable
+
+@* Prázdný element - komponenta nemá UI, pouze monitoruje stav připojení k internetu a řeší přechody mezi online/offline režimy *@
+<div></div>
+
+@code {
+    // Ukládáme poslední známý stav připojení pro detekci změny
+    private bool _lastConnectionState;
+
+    // Inicializace komponenty - registrujeme se na události změny připojení
+    protected override void OnInitialized()
+    {
+        Logger.LogInformation("ConnectivityMonitor: Inicializace");
+
+        // Uložíme počáteční stav
+        _lastConnectionState = ConnectivityService.IsConnected;
+
+        // Přihlásíme se k odběru událostí ze služby
+        ConnectivityService.ConnectivityChanged += OnConnectivityChanged;
+    }
+
+    // Zpracování změny stavu připojení
+    // Tohle je dost složitá logika - musíme pracovat s různými stavy přihlášení
+    // a ošetřit přechody mezi online/offline
+    private async void OnConnectivityChanged(bool isConnected)
+    {
+        await InvokeAsync(async () =>
+        {
+            Logger.LogInformation($"ConnectivityMonitor: Změna stavu připojení na {(isConnected ? "online" : "offline")}");
+
+            // Zkontrolujeme, zda je uživatel přihlášen
+            var isUserLoggedInFlag = await SecureStorage.GetAsync("user_logged_in");
+            bool isUserLoggedIn = isUserLoggedInFlag == "true";
+
+            if (isConnected)
+            {
+                // Přechod do online režimu
+                await SecureStorage.SetAsync("is_offline_mode", "false");
+
+                // Odstraníme perzistentní notifikaci (pokud byla zobrazena pro přihlášeného uživatele)
+                NotificationService.RemovePersistentToast();
+
+                // Běžná notifikace o obnoveném připojení
+                NotificationService.ShowToast("Připojení obnoveno", NotificationType.Success);
+
+                // Pokud byl uživatel přihlášen v offline režimu, obnovíme Firebase session
+                if (isUserLoggedIn)
+                {
+                    await HandleConnectionRestored();
+                }
+            }
+            else
+            {
+                // Přechod do offline režimu
+                await SecureStorage.SetAsync("is_offline_mode", "true");
+
+                if (isUserLoggedIn)
+                {
+                    // Pro přihlášeného uživatele - perzistentní notifikace a záznam do historie
+                    string message = "Aplikace přešla do offline režimu. Data budou synchronizována po obnovení připojení.";
+
+                    // Zobrazíme perzistentní notifikaci, která zůstane viditelná
+                    NotificationService.ShowPersistentToast(message, NotificationType.Warning, showCloseIcon: true);
+
+                    // Přidáme záznam do historie
+                    await NotificationService.AddNotificationAsync(new NotificationItem
+                        {
+                            Message = message,
+                            Type = NotificationType.Warning,
+                            Category = NotificationCategory.System,
+                            Title = "Offline režim"
+                        });
+
+                    // Nastavíme příznak offline autentizace
+                    await SecureStorage.SetAsync("is_offline_authenticated", "true");
+                }
+                else
+                {
+                    // Pro nepřihlášeného uživatele - jen jednoduchá notifikace
+                    NotificationService.ShowToast("Aplikace přešla do offline režimu", NotificationType.Warning);
+                }
+            }
+
+            _lastConnectionState = isConnected;
+        });
+    }
+
+    //POMOCNÉ METODY
+    // Zpracování obnovení připojení, když byl uživatel přihlášen v offline režimu
+    // Tato metoda se pokusí obnovit Firebase session a znovu přihlásit uživatele
+    private async Task HandleConnectionRestored()
+    {
+        Logger.LogInformation("ConnectivityMonitor: Zpracování obnovení připojení pro přihlášeného uživatele");
+
+        try
+        {
+            // Zkontrolujeme, jestli jsme byli v režimu offline přihlášení
+            var offlineAuth = await SecureStorage.GetAsync("is_offline_authenticated");
+            if (offlineAuth == "true")
+            {
+                // Zobrazíme perzistentní informaci uživateli
+                NotificationService.ShowPersistentToast("Obnovuji připojení k serveru...", NotificationType.Info);
+
+                // Zkusíme obnovit Firebase session
+                var refreshToken = await SecureStorage.GetAsync("refresh_token");
+
+                if (!string.IsNullOrEmpty(refreshToken))
+                {
+                    try
+                    {
+                        // Obnovíme token - tohle umí Firebase sám
+                        var newIdToken = await FirebaseAuthService.RefreshTokenAsync(refreshToken);
+                        if (!string.IsNullOrEmpty(newIdToken))
+                        {
+                            // Uložíme nový token
+                            await SecureStorage.SetAsync("firebase_token", newIdToken);
+
+                            // Přihlásíme uživatele s novým tokenem
+                            var user = await FirebaseAuthService.LoginAsync(newIdToken);
+
+                            if (user != null)
+                            {
+                                // Odstraníme perzistentní notifikaci
+                                NotificationService.RemovePersistentToast();
+
+                                // Vyvoláme událost pro synchronizaci dat s needsSynchronization=true
+                                FirebaseAuthService.NotifyUserLoggedIn(user.DocumentId ?? string.Empty);
+
+                                // Zobrazíme běžný toast s výsledkem
+                                NotificationService.ShowToast("Připojení k serveru obnoveno", NotificationType.Success);
+
+                                // Odstraníme příznak offline přihlášení
+                                SecureStorage.Remove("is_offline_authenticated");
+
+                                return;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "Chyba při obnově Firebase session");
+                    }
+                }
+
+                // Odstraníme perzistentní toast - provede se jen pokud jsme neodešli v úspěšné větvi
+                NotificationService.RemovePersistentToast();
+
+                // Pokud se nám nepodařilo obnovit session, informujeme uživatele
+                NotificationService.ShowToast("Nepodařilo se obnovit připojení k serveru. Některé funkce mohou být omezené.", NotificationType.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Chyba při zpracování obnovení připojení");
+        }
+    }
+
+    // UVOLNĚNÍ ZDROJŮ
+    // Uvolní zdroje komponenty - odregistruje event handlery pro předejití memory leaků
+    public void Dispose()
+    {
+        ConnectivityService.ConnectivityChanged -= OnConnectivityChanged;
+        Logger.LogInformation("ConnectivityMonitor: Ukončení");
+    }
+}

@@ -1,0 +1,93 @@
+<!-- Index.html - Hlavní vstupní soubor pro Blazor aplikaci Taskly -->
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Language" content="cs, en" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Taskly</title>
+    <!-- Nastavení základní URL adresy pro odkazy v aplikaci -->
+    <base href="/" />
+
+    <!-- Načtení potřebných CSS stylů -->
+    <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" /> <!-- Bootstrap framework pro základní vzhled -->
+    <link rel="stylesheet" href="css/app.css" /> <!-- Vlastní CSS styly aplikace -->
+    <link rel="stylesheet" href="Taskly.styles.css" /> <!-- Styly generované Blazorem pro komponenty -->
+    <link rel="icon" type="image/png" href="favicon.png" /> <!-- Ikona aplikace v záložce prohlížeče -->
+    <!-- Načtení Google Fonts - Roboto pro konzistentní vzhled napříč platformami -->
+    <link href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap" rel="stylesheet" />
+
+    <!-- MudBlazor CSS komponenty -->
+    <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
+
+    <!-- Styl pouze pro načítací obrazovku -->
+    <style>
+        /* Styl pro počáteční načítací obrazovku - zobrazuje se během spouštění Blazoru */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #512BD4;
+            z-index: 9999; /* Vysoká z-index hodnota zajistí zobrazení nad ostatními prvky */
+            flex-direction: column;
+        }
+
+            #loading-screen img {
+                max-width: 350px;
+                height: auto;
+                animation: pulse 2s infinite; /* Animace pulzování loga pro lepší UX */
+            }
+
+        /* Keyframes definice pro animaci pulzování */
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        /* Skryje načítací obrazovku, jakmile se načte Blazor aplikace */
+        #app:not(:empty) + #loading-screen {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Oblast pro bezpečný prostor na zařízeních s výřezem nebo status barem -->
+    <div class="status-bar-safe-area"></div>
+
+    <!-- Div pro vykreslení Blazor aplikace -->
+    <div id="app"></div>
+
+    <!-- Načítací obrazovka, která se zobrazí před načtením Blazoru -->
+    <div id="loading-screen">
+        <h1 style="color:white; font-size: 7rem; margin-bottom: 3rem;">Taskly</h1>
+        <img src="images/taskly_logo.png" alt="Taskly" />
+    </div>
+
+    <!-- UI prvek pro zobrazení chyb Blazoru - standardní součást Blazor aplikací -->
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="" class="reload">Reload</a>
+        <a class="dismiss">🗙</a>
+    </div>
+
+    <!-- JavaScript pro Blazor a MudBlazor -->
+    <!-- Parametr autostart="false" umožňuje vlastní inicializaci Blazoru v kódu aplikace -->
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+</body>
+</html>
