@@ -1,0 +1,113 @@
+﻿@* Potřebné namespace *@
+
+@namespace Taskly.Components.Core
+@using Taskly.Services.Tasks
+@using Taskly.Services.Projects
+
+@* Služby pro DI *@
+@inject ITaskService TaskService
+@inject IProjectService ProjectService
+@inject ILogger<DashboardInitializer> Logger
+
+@* Prázdný element - komponenta nemá UI, pouze načítá a připravuje data pro dashboard včetně metrik a seznamů úkolů *@
+<div></div>
+
+@code {
+    // DATOVÉ PROMĚNNÉ
+    // Proměnné pro dashboard data, které budou dostupné přes vlastnosti
+    private List<TaskItem>? _recentTasks;
+    private List<TaskItem>? _upcomingTasks;
+    private int _totalTasks;
+    private int _completedTasks;
+    private int _totalProjects;
+    private int _pendingSyncCount;
+    private bool _isDataLoaded;
+
+    // Veřejné vlastnosti pro přístup k datům - s ochranou proti null hodnotám
+    public List<TaskItem> RecentTasks => _recentTasks ?? new List<TaskItem>();
+    public List<TaskItem> UpcomingTasks => _upcomingTasks ?? new List<TaskItem>();
+    public int TotalTasks => _totalTasks;
+    public int CompletedTasks => _completedTasks;
+    public int TotalProjects => _totalProjects;
+    public int PendingSyncCount => _pendingSyncCount;
+    public bool IsDataLoaded => _isDataLoaded;
+
+    // Událost, která se vyvolá, když jsou data načtena - můžeme ji použít pro aktualizaci UI
+    public event Action? OnDashboardDataLoaded;
+
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    // Inicializace komponenty - načteme data a přihlásíme se k událostem
+    protected override async Task OnInitializedAsync()
+    {
+        // Načteme data hned na začátku, aby dashboard nebyl prázdný
+        await PreloadDashboardDataAsync();
+
+        // Přihlásíme se k událostem pro aktualizaci dat - tohle je důležité pro reaktivitu
+        TaskService.OnTasksChanged += OnDataChanged;
+        ProjectService.OnProjectsChanged += OnDataChanged;
+    }
+
+    // NAČÍTÁNÍ DAT
+    // Předběžné načtení všech dat pro dashboard - tohle se volá při inicializaci i při změnách
+    private async Task PreloadDashboardDataAsync()
+    {
+        try
+        {
+            // Využijeme už předem načtená data z Task a Project služeb - šetříme volání API
+            var tasks = await TaskService.GetTasksAsync();
+            var projects = await ProjectService.GetProjectsAsync();
+
+            // Předpočítáme metriky pro zobrazení v kartičkách
+            _totalTasks = tasks.Count;
+            _completedTasks = tasks.Count(t => t.Status == TaskItemStatus.Completed);
+            _totalProjects = projects.Count;
+            _pendingSyncCount = tasks.Count(t => t.NeedsSynchronization) +
+                               projects.Count(p => p.NeedsSynchronization);
+
+            // Předpočítáme seznamy pro dashboard - omezíme počet položek pro rychlé zobrazení
+            _recentTasks = tasks
+                .OrderByDescending(t => t.CreatedAt)  // Nejnovější první
+                .Take(5)  // Jen 5 nejnovějších
+                .ToList();
+
+            _upcomingTasks = tasks
+                .Where(t => t.Status != TaskItemStatus.Completed &&
+                         t.Status != TaskItemStatus.Cancelled &&
+                         t.DueDate.HasValue &&
+                         t.DueDate.Value > DateTime.UtcNow &&
+                         t.DueDate.Value < DateTime.UtcNow.AddDays(7))  // Jen úkoly na příštích 7 dní
+                .OrderBy(t => t.DueDate)  // Seřadíme podle termínu
+                .Take(7)  // Omezíme na 7 položek
+                .ToList();
+
+            _isDataLoaded = true;
+
+            // Vyvoláme událost o načtení dat - tohle aktualizuje UI
+            OnDashboardDataLoaded?.Invoke();
+
+            Logger.LogInformation("Dashboard data předběžně načtena: {TotalTasks} úkolů, {CompletedTasks} dokončeno, {TotalProjects} projektů",
+                _totalTasks, _completedTasks, _totalProjects);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Chyba při předběžném načítání dat pro dashboard");
+            _isDataLoaded = false;
+        }
+    }
+
+    // EVENT HANDLERY
+    // Reakce na změnu dat v službach - zajistí aktualizaci dashboardu
+    private async void OnDataChanged()
+    {
+        // Musíme použít InvokeAsync, protože event může přijít z jiného vlákna
+        await InvokeAsync(PreloadDashboardDataAsync);
+    }
+
+    // UVOLNĚNÍ ZDROJŮ
+    // Uvolníme zdroje komponenty - odregistrujeme event handlery pro předejití memory leaků
+    public void Dispose()
+    {
+        TaskService.OnTasksChanged -= OnDataChanged;
+        ProjectService.OnProjectsChanged -= OnDataChanged;
+    }
+}

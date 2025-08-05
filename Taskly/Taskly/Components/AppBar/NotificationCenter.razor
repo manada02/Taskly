@@ -1,0 +1,344 @@
+﻿@* Potřebné namespace *@
+@using Taskly.Models
+@using Taskly.Services.Notification
+@implements IDisposable
+
+@* Služby pro DI *@
+@inject INotificationService NotificationService
+@inject ConnectivityService ConnectivityService
+@inject IAuthService FirebaseAuthService
+@inject ILogger<NotificationCenter> _logger
+@inject IDialogService DialogService
+
+
+@* Badge s počítadlem notifikací a tlačítko pro zobrazení *@
+<MudBadge Color="Color.Error"
+          Overlap="true"
+          Bordered="true"
+          Visible="@(Notifications.Any())"
+          Content="@Notifications.Count.ToString()"
+          Origin="Origin.TopRight"
+          Dot="false"
+          Style="margin-top: 4px; ">
+    <MudTooltip Text="Vaše oznámení">
+        <MudIconButton Icon="@Icons.Material.Filled.Notifications"
+                       Color="Color.Inherit"
+                       OnClick="@ToggleDrawer" />
+    </MudTooltip>
+</MudBadge>
+
+@* Drawer pro zobrazení notifikací - vysouvá se zprava *@
+<MudDrawer @bind-Open="@IsOpen" Anchor="Anchor.Right" Elevation="3" Width="350px" Variant="@DrawerVariant.Temporary">
+
+    @* Hlavička notifikačního centra *@
+    <MudPaper Elevation="0" Class="pa-3 mud-theme-primary">
+        <MudToolBar Gutters="false" Dense="true">
+            <MudText Typo="Typo.h6">Notifikační centrum</MudText>
+            <MudSpacer />
+            <MudTooltip Text="Vymazat všechny notifikace" Placement="Placement.Start">
+                <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep"
+                               Color="Color.Inherit"
+                               Size="Size.Medium"
+                               OnClick="ClearNotifications"
+                               Disabled="@(!Notifications.Any())" />
+            </MudTooltip>
+        </MudToolBar>
+    </MudPaper>
+
+    @* Hlavní kategorie filtrů *@
+    <MudPaper Elevation="0" Class="px-2 pt-3">
+
+        @* VŠE filtr na prvním řádku *@
+        <MudItem Class="mb-2">
+            <MudChip T="string" Color="@(_categoryFilter == "all" ? Color.Primary : Color.Default)"
+                     Variant="@(_categoryFilter == "all" ? Variant.Filled : Variant.Outlined)"
+                     OnClick="@(() => SetCategoryFilter("all"))"
+                     Icon="@Icons.Material.Filled.Inbox"
+                     Class="w-100 justify-center rounded-pill">
+                VŠE
+            </MudChip>
+        </MudItem>
+
+        @* Ostatní filtry na druhém řádku *@
+        <MudGrid Spacing="1" Class="mb-2 pa-0">
+            <MudItem xs="4">
+                <MudChip T="string" Color="@(_categoryFilter == "system" ? Color.Primary : Color.Default)"
+                         Variant="@(_categoryFilter == "system" ? Variant.Filled : Variant.Outlined)"
+                         OnClick="@(() => SetCategoryFilter("system"))"
+                         Icon="@Icons.Material.Filled.Info"
+                         Class="w-100 justify-center rounded-pill">
+                    SYSTEM
+                </MudChip>
+            </MudItem>
+            <MudItem xs="4">
+                <MudChip T="string" Color="@(_categoryFilter == "tasks" ? Color.Primary : Color.Default)"
+                         Variant="@(_categoryFilter == "tasks" ? Variant.Filled : Variant.Outlined)"
+                         OnClick="@(() => SetCategoryFilter("tasks"))"
+                         Icon="@Icons.Material.Filled.Assignment"
+                         Class="w-100 justify-center rounded-pill">
+                    ÚKOLY
+                </MudChip>
+            </MudItem>
+            <MudItem xs="4">
+                <MudChip T="string" Color="@(_categoryFilter == "projects" ? Color.Primary : Color.Default)"
+                         Variant="@(_categoryFilter == "projects" ? Variant.Filled : Variant.Outlined)"
+                         OnClick="@(() => SetCategoryFilter("projects"))"
+                         Icon="@Icons.Material.Filled.Folder"
+                         Class="w-100 justify-center rounded-pill">
+                    PROJEKTY
+                </MudChip>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @* Sekundární filtry - zobrazí se jen pro úkoly a projekty *@
+    @if (_categoryFilter == "tasks" || _categoryFilter == "projects")
+    {
+        <MudPaper Elevation="0" Class="px-2 pb-3">
+            <MudText Typo="Typo.caption" Class="mb-2 px-2">
+                Filtrovat @(_categoryFilter == "tasks" ? "úkoly" : "projekty")
+            </MudText>
+            <MudGrid Spacing="1" Class="pa-0">
+                <MudItem xs="4">
+                    <MudChip T="string" Color="@(_typeFilter == "all" ? Color.Secondary : Color.Default)"
+                             Variant="@(_typeFilter == "all" ? Variant.Filled : Variant.Outlined)"
+                             OnClick="@(() => SetTypeFilter("all"))"
+                             Size="Size.Small"
+                             Class="w-100 justify-center rounded-pill">
+                        VŠE
+                    </MudChip>
+                </MudItem>
+                <MudItem xs="4">
+                    <MudChip T="string" Color="@(_typeFilter == "changes" ? Color.Secondary : Color.Default)"
+                             Variant="@(_typeFilter == "changes" ? Variant.Filled : Variant.Outlined)"
+                             OnClick="@(() => SetTypeFilter("changes"))"
+                             Size="Size.Small"
+                             Class="w-100 justify-center rounded-pill">
+                        ZMĚNY
+                    </MudChip>
+                </MudItem>
+                <MudItem xs="4">
+                    <MudChip T="string" Color="@(_typeFilter == "reminders" ? Color.Secondary : Color.Default)"
+                             Variant="@(_typeFilter == "reminders" ? Variant.Filled : Variant.Outlined)"
+                             OnClick="@(() => SetTypeFilter("reminders"))"
+                             Size="Size.Small"
+                             Class="w-100 justify-center rounded-pill">
+                        PŘIPOMÍNKY
+                    </MudChip>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+    }
+
+    @* Seznam notifikací *@
+    <MudPaper Elevation="0" Class="overflow-auto pa-4" Style="height: calc(100% - 140px);">
+        @if (FilteredNotifications.Any())
+        {
+            <MudStack Spacing="3">
+                @foreach (var notification in FilteredNotifications)
+                {
+                    <MudPaper Elevation="2" Class="pa-3 rounded-lg">
+                        <MudGrid>
+                            <MudItem xs="2">
+                                <MudAvatar Color="@GetColor(notification.Type)" Size="Size.Medium">
+                                    <MudIcon Icon="@GetIcon(notification.Type)" />
+                                </MudAvatar>
+                            </MudItem>
+                            <MudItem xs="9">
+                                <MudText Typo="Typo.body1" Style="word-wrap: break-word;">@notification.Message</MudText>
+                                <MudText Typo="Typo.caption" Class="mt-1">
+                                    @(notification.Timestamp.HasValue ? FormatTimestamp(notification.Timestamp.Value) : "-")
+                                </MudText>
+                            </MudItem>
+                            <MudItem xs="1" Class="d-flex justify-end align-center">
+                                <MudTooltip Text="Vymazat notifikaci" Placement="Placement.Start">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                   Size="Size.Small"
+                                                   Color="Color.Error"
+                                                   OnClick="@(() => DeleteNotification(notification.Id))" />
+                                </MudTooltip>
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+                }
+            </MudStack>
+        }
+        else
+        {
+            <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Class="h-100">
+                <MudIcon Icon="@Icons.Material.Filled.Notifications" Size="Size.Large" Color="Color.Secondary" />
+                <MudText Class="mt-4" Align="Align.Center">Zatím nemáte žádné notifikace</MudText>
+            </MudStack>
+        }
+    </MudPaper>
+</MudDrawer>
+
+@code {
+    // Parametry komponenty
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsOpenChanged { get; set; }
+
+    // Kolekce notifikací
+    private List<NotificationItem> Notifications = new();
+
+    // Filtry pro zobrazení
+    private string _categoryFilter = "all";
+    private string _typeFilter = "all";
+
+    // Inicializace při načtení komponenty
+    protected override async Task OnInitializedAsync()
+    {
+        Notifications = await NotificationService.GetNotificationsAsync();
+        NotificationService.OnNotificationsChanged += OnNotificationsChanged;
+    }
+
+    // Event handler pro změny v notifikacích
+    private async void OnNotificationsChanged()
+    {
+        Notifications = await NotificationService.GetNotificationsAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Přepínání zobrazení draweru
+    private async Task ToggleDrawer()
+    {
+        IsOpen = !IsOpen;
+        await IsOpenChanged.InvokeAsync(IsOpen);
+    }
+
+    // Nastavení hlavního filtru
+    private async Task SetCategoryFilter(string category)
+    {
+        _categoryFilter = category;
+        _typeFilter = "all"; // Reset podfiltrů
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Nastavení podkategorie
+    private async Task SetTypeFilter(string type)
+    {
+        _typeFilter = type;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Hromadné mazání notifikací s potvrzením
+    private async Task ClearNotifications()
+    {
+        var confirmation = await DialogService.ShowMessageBox(
+            "Smazat notifikace",
+            "Opravdu chcete smazat všechny notifikace?",
+            "Ano", "Ne");
+
+        if (confirmation == true)
+        {
+            await NotificationService.ClearNotificationsAsync();
+        }
+    }
+
+    // Smazání jedné notifikace
+    private async Task DeleteNotification(string id)
+    {
+        await NotificationService.DeleteNotificationAsync(id);
+    }
+
+    // Výpočetní vlastnost - filtrované notifikace
+    private List<NotificationItem> FilteredNotifications
+    {
+        get
+        {
+            // Nejdřív podle kategorie
+            var categoryFiltered = _categoryFilter switch
+            {
+                "all" => Notifications,
+                "tasks" => Notifications.Where(n => n.Category == NotificationCategory.Task ||
+                                                   n.Category == NotificationCategory.TaskReminder).ToList(),
+                "projects" => Notifications.Where(n => n.Category == NotificationCategory.Project ||
+                                                      n.Category == NotificationCategory.ProjectReminder).ToList(),
+                "system" => Notifications.Where(n => n.Category == NotificationCategory.System).ToList(),
+                _ => Notifications
+            };
+
+            _logger.LogInformation("Filtrované notifikace pro kategorii '{Category}': {Count}",
+                                   _categoryFilter, categoryFiltered.Count);
+
+            // Pak ještě filtrujeme podle typu
+            if (_categoryFilter == "tasks" && _typeFilter != "all")
+            {
+                var result = _typeFilter switch
+                {
+                    "changes" => categoryFiltered.Where(n => n.Category == NotificationCategory.Task).ToList(),
+                    "reminders" => categoryFiltered.Where(n => n.Category == NotificationCategory.TaskReminder).ToList(),
+                    _ => categoryFiltered
+                };
+                _logger.LogInformation("Po podfiltru '{Type}' pro úkoly: {Count}", _typeFilter, result.Count);
+                return result;
+            }
+            else if (_categoryFilter == "projects" && _typeFilter != "all")
+            {
+                var result = _typeFilter switch
+                {
+                    "changes" => categoryFiltered.Where(n => n.Category == NotificationCategory.Project).ToList(),
+                    "reminders" => categoryFiltered.Where(n => n.Category == NotificationCategory.ProjectReminder).ToList(),
+                    _ => categoryFiltered
+                };
+                _logger.LogInformation("Po podfiltru '{Type}' pro projekty: {Count}", _typeFilter, result.Count);
+                return result;
+            }
+
+            return categoryFiltered;
+        }
+    }
+
+    // Vrací ikonu pro daný typ notifikace
+    private string GetIcon(NotificationType type)
+    {
+        return type switch
+        {
+            NotificationType.Success => Icons.Material.Filled.CheckCircle,
+            NotificationType.Info => Icons.Material.Filled.Info,
+            NotificationType.Warning => Icons.Material.Filled.Warning,
+            NotificationType.Error => Icons.Material.Filled.Error,
+            _ => Icons.Material.Filled.Notifications
+        };
+    }
+
+    // Vrací barvu pro daný typ
+    private Color GetColor(NotificationType type)
+    {
+        return type switch
+        {
+            NotificationType.Success => Color.Success,
+            NotificationType.Info => Color.Info,
+            NotificationType.Warning => Color.Warning,
+            NotificationType.Error => Color.Error,
+            _ => Color.Default
+        };
+    }
+
+    // Pomocná metoda pro formátování času - dnes, včera, datum
+    private string FormatTimestamp(DateTime timestamp)
+    {
+        if (timestamp.Date == DateTime.Today)
+        {
+            return $"Dnes, {timestamp:HH:mm}";
+        }
+        else if (timestamp.Date == DateTime.Today.AddDays(-1))
+        {
+            return $"Včera, {timestamp:HH:mm}";
+        }
+        else
+        {
+            return timestamp.ToString("dd.MM.yyyy, HH:mm");
+        }
+    }
+
+    // UVOLNĚNÍ ZDROJŮ 
+    // Uvolní zdroje komponenty - odregistruje event handlery pro předejití memory leaků
+    public void Dispose()
+    {
+        NotificationService.OnNotificationsChanged -= OnNotificationsChanged;
+    }
+}

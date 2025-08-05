@@ -1,0 +1,468 @@
+﻿@* Potřebné namespace *@
+@using Taskly.Models
+@using System.ComponentModel.DataAnnotations
+
+<div>
+    <MudDialog Class="task-dialog-container" >
+        <DialogContent>
+            @* Hlavička dialogu s ikonou pro úkoly *@
+            <div class="task-dialog-header mb-4">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    @* Ikona úkolu *@
+                    <MudIcon Icon="@Icons.Material.Filled.Task" Size="Size.Large" Color="Color.Secondary" />
+
+                    @* Hlavní nadpisy a popis dialogu *@
+                    <div style="flex: 1; min-width: 0;">
+                        @if (isNew)
+                        {
+                            <MudText Typo="Typo.h5" Class="task-dialog-title">
+                                Nový úkol
+                            </MudText>
+                        }
+                        else
+                        {
+                            <MudTooltip Text="@task.Title" Placement="Placement.Bottom"
+                                        Style="max-width: 400px; white-space: normal; word-break: break-word;">
+                                <MudText Typo="Typo.h5" Class="task-dialog-title task-title-ellipsis">
+                                    @task.Title
+                                </MudText>
+                            </MudTooltip>
+                        }
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="task-dialog-subtitle">
+                            @if (isNew)
+                            {
+                                @("Vytvořte nový úkol")
+                            }
+                            else if (IsReadOnly)
+                            {
+                                @("Zobrazení detailů úkolu")
+                            }
+                            else
+                            {
+                                @("Upravte detaily úkolu")
+                            }
+                        </MudText>
+                    </div>
+                </MudStack>
+            </div>
+
+            @* Formulář s údaji o úkolu *@
+            <MudForm @ref="form" @bind-IsValid="@isValid">
+                <MudGrid>
+                    @* Pole pro název úkolu *@
+                    <MudItem xs="12">
+                        <MudTextField Value="@task.Title"
+                                      ValueChanged="@((string val) => { task.Title = val; CheckForChanges(); })"
+                                      Label="Název"
+                                      Required="true"
+                                      RequiredError="Název je povinný"
+                                      MaxLength="100"
+                                      Counter="100"
+                                      Variant="Variant.Outlined"
+                                      Class="task-form-field"
+                                      ReadOnly="@IsReadOnly"
+                                      spellcheck="false" />
+                    </MudItem>
+
+                    @* Pole pro popis úkolu *@
+                    <MudItem xs="12">
+                        <MudTextField Value="@task.Description"
+                                      ValueChanged="@((string val) => { task.Description = val; CheckForChanges(); })"
+                                      Label="Popis"
+                                      Lines="3"
+                                      MaxLength="500"
+                                      Counter="500"
+                                      Variant="Variant.Outlined"
+                                      Class="task-form-field task-description-textarea"
+                                      ReadOnly="@IsReadOnly"
+                                      spellcheck="false" />
+                    </MudItem>
+
+                    @* Sekce pro výběr termínu dokončení *@
+                    <MudItem xs="12" sm="6">
+                        <MudDatePicker @bind-Date="dueDate"
+                                       @bind-Date:after="CheckForChanges"
+                                       Label="Datum"
+                                       MinDate="@DateTime.Today"
+                                       MaxDate="@maxDueDate"
+                                       PickerVariant="PickerVariant.Dialog"
+                                       DateFormat="dd.MM.yyyy"
+                                       Editable="true"
+                                       Placeholder="Vyberte datum"
+                                       AutoClose="true"
+                                       Variant="Variant.Outlined"
+                                       Class="task-date-picker"
+                                       ReadOnly="@IsReadOnly" />
+
+                        @* Upozornění na termín projektu *@
+                        @if (maxDueDate.HasValue)
+                        {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="px-2 mt-1 task-deadline-info">
+                                    <MudIcon Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="mr-1" />
+                                    Úkol musí být dokončen nejpozději do @maxDueDate.Value.ToString("dd.MM.yyyy") (termín projektu).
+                                </MudText>
+                        }
+                    </MudItem>
+
+                    @* Výběr času dokončení *@
+                    <MudItem xs="12" sm="6">
+                        <MudTimePicker @bind-Time="dueTime"
+                                       @bind-Time:after="CheckForChanges"
+                                       Label="Čas"
+                                       AmPm="false"
+                                       PickerVariant="PickerVariant.Dialog"
+                                       TimeFormat="HH:mm"
+                                       Editable="true"
+                                       Placeholder="Vyberte čas"
+                                       AutoClose="true"
+                                       Variant="Variant.Outlined"
+                                       Class="task-time-picker"
+                                       ReadOnly="@IsReadOnly" />
+                    </MudItem>
+
+                    @* Sekce upozornění na termín úkolu *@
+                    <MudItem xs="12">
+                        <div class="task-reminder-section">
+                            <MudText Typo="Typo.subtitle1" Class="reminder-section-title">
+                                <MudIcon Icon="@Icons.Material.Filled.Notifications" Class="mr-2" Size="Size.Small" />
+                                Upozornění na termín
+                            </MudText>
+
+                            @if (!dueDate.HasValue)
+                            {
+                                @* Stav kdy není nastaven termín *@
+                                    <div class="reminder-disabled-state">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                                            <MudIcon Icon="@Icons.Material.Filled.NotificationsOff" Class="mr-1" Size="Size.Small" />
+                                            Pro upozornění je nutné nastavit termín úkolu.
+                                        </MudText>
+                                    </div>
+                            }
+                            else
+                            {
+                                @* Výběr typu upozornění pomocí chipů *@
+                                    <MudChipSet T="string" SelectionMode="SelectionMode.MultiSelection" Class="mt-2 reminder-chips-container">
+                                        <MudChip Color="@(task.EnableDayReminder ? Color.Primary : Color.Default)"
+                                                 OnClick="@(IsReadOnly ? () => { } : () => { task.EnableDayReminder = !task.EnableDayReminder; CheckForChanges(); })"
+                                                 Variant="@(task.EnableDayReminder ? Variant.Filled : Variant.Outlined)"
+                                                 Icon="@Icons.Material.Filled.Today"
+                                                 Class="reminder-chip"
+                                                 Disabled="@IsReadOnly">
+                                            1 den
+                                        </MudChip>
+
+                                        <MudChip Color="@(task.EnableHourReminder ? Color.Secondary : Color.Default)"
+                                                 OnClick="@(IsReadOnly ? () => { } : () => { task.EnableHourReminder = !task.EnableHourReminder; CheckForChanges(); })"
+                                                 Variant="@(task.EnableHourReminder ? Variant.Filled : Variant.Outlined)"
+                                                 Icon="@Icons.Material.Filled.AccessTime"
+                                                 Class="reminder-chip"
+                                                 Disabled="@IsReadOnly">
+                                            2 hodiny
+                                        </MudChip>
+
+                                        <MudChip Color="@(task.EnableMinuteReminder ? Color.Tertiary : Color.Default)"
+                                                 OnClick="@(IsReadOnly ? () => { } : () => { task.EnableMinuteReminder = !task.EnableMinuteReminder; CheckForChanges(); })"
+                                                 Variant="@(task.EnableMinuteReminder ? Variant.Filled : Variant.Outlined)"
+                                                 Icon="@Icons.Material.Filled.Timer"
+                                                 Class="reminder-chip"
+                                                 Disabled="@IsReadOnly">
+                                            30 minut
+                                        </MudChip>
+                                    </MudChipSet>
+                            }
+                        </div>
+                    </MudItem>
+
+                    @* Výběr stavu úkolu *@
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="TaskItemStatus" Value="@task.Status"
+                                   ValueChanged="@((TaskItemStatus val) => { task.Status = val; CheckForChanges(); })"
+                                   Label="Stav"
+                                   Required="true"
+                                   Variant="Variant.Outlined"
+                                   Class="task-select-field"
+                                   AnchorOrigin="Origin.BottomCenter"
+                                   Disabled="@IsReadOnly">
+                            <MudSelectItem Value="@(TaskItemStatus.New)">
+                                <div class="select-item-content">
+                                    <MudIcon Icon="@Icons.Material.Filled.FiberNew" Class="mr-2" Color="Color.Info" />
+                                    Nový
+                                </div>
+                            </MudSelectItem>
+                            <MudSelectItem Value="@(TaskItemStatus.InProgress)">
+                                <div class="select-item-content">
+                                    <MudIcon Icon="@Icons.Material.Filled.PlayArrow" Class="mr-2" Color="Color.Warning" />
+                                    Rozpracovaný
+                                </div>
+                            </MudSelectItem>
+                            <MudSelectItem Value="@(TaskItemStatus.Completed)">
+                                <div class="select-item-content">
+                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Class="mr-2" Color="Color.Success" />
+                                    Dokončený
+                                </div>
+                            </MudSelectItem>
+                            <MudSelectItem Value="@(TaskItemStatus.Postponed)">
+                                <div class="select-item-content">
+                                    <MudIcon Icon="@Icons.Material.Filled.Schedule" Class="mr-2" Color="Color.Secondary" />
+                                    Odložený
+                                </div>
+                            </MudSelectItem>
+                            <MudSelectItem Value="@(TaskItemStatus.Cancelled)">
+                                <div class="select-item-content">
+                                    <MudIcon Icon="@Icons.Material.Filled.Cancel" Class="mr-2" Color="Color.Error" />
+                                    Zrušený
+                                </div>
+                            </MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+
+                    @* Výběr priority úkolu *@
+                    <MudItem xs="12" sm="6">
+                        <MudSelect T="TaskPriority" Value="@task.Priority"
+                                   ValueChanged="@((TaskPriority val) => { task.Priority = val; CheckForChanges(); })"
+                                   Label="Priorita"
+                                   Required="true"
+                                   Variant="Variant.Outlined"
+                                   Class="task-select-field"
+                                   AnchorOrigin="Origin.BottomCenter"
+                                   Disabled="@IsReadOnly">
+                            <MudSelectItem Value="@(TaskPriority.Low)">
+                                <div class="select-item-content">
+                                    <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="mr-2" Color="Color.Success" />
+                                    Nízká
+                                </div>
+                            </MudSelectItem>
+                            <MudSelectItem Value="@(TaskPriority.Medium)">
+                                <div class="select-item-content">
+                                    <MudIcon Icon="@Icons.Material.Filled.Remove" Class="mr-2" Color="Color.Warning" />
+                                    Střední
+                                </div>
+                            </MudSelectItem>
+                            <MudSelectItem Value="@(TaskPriority.High)">
+                                <div class="select-item-content">
+                                    <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowUp" Class="mr-2" Color="Color.Error" />
+                                    Vysoká
+                                </div>
+                            </MudSelectItem>
+                            <MudSelectItem Value="@(TaskPriority.Critical)">
+                                <div class="select-item-content">
+                                    <MudIcon Icon="@Icons.Material.Filled.PriorityHigh" Class="mr-2" Color="Color.Dark" />
+                                    Kritická
+                                </div>
+                            </MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+
+                    @* Stavové indikátory a upozornění *@
+                    @if (isOffline)
+                    {
+                            <MudItem xs="12">
+                                <MudAlert Severity="Severity.Warning" Variant="Variant.Filled" Class="mt-2 task-status-alert">
+                                    <MudIcon Icon="@Icons.Material.Filled.WifiOff" Class="mr-2" />
+                                    Pracujete v offline režimu. Úkol bude synchronizován po připojení k internetu.
+                                </MudAlert>
+                            </MudItem>
+                    }
+
+                    @if (hasChanges && !isNew && !IsReadOnly)
+                    {
+                            <MudItem xs="12">
+                                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-2 task-status-alert">
+                                    <MudIcon Icon="@Icons.Material.Filled.Edit" Class="mr-2" />
+                                    Provedli jste změny, které zatím nebyly uloženy.
+                                </MudAlert>
+                            </MudItem>
+                    }
+                </MudGrid>
+            </MudForm>
+        </DialogContent>
+
+        @* Akční tlačítka dialogu *@
+        <DialogActions>
+            <div class="task-dialog-actions">
+                <MudButton OnClick="Cancel"
+                           Variant="Variant.Text"
+                           Class="task-cancel-button">
+                    @(IsReadOnly ? "Zavřít" : "Zrušit")
+                </MudButton>
+
+                @if (!IsReadOnly)
+                {
+                        <MudButton Color="Color.Primary"
+                                   OnClick="Submit"
+                                   Variant="Variant.Filled"
+                                   Disabled="@(!isValid || (!isNew && !hasChanges))"
+                                   Class="task-submit-button">
+                        @(isNew ? "Vytvořit úkol" : "Uložit změny")
+                        </MudButton>
+                }
+            </div>
+        </DialogActions>
+    </MudDialog>
+</div>
+
+@code {
+    // PARAMETRY A PROMĚNNÉ
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; } = default!;
+
+    // Vstupní parametry dialogu
+    [Parameter] public TaskItem Task { get; set; } = default!;
+    [Parameter] public bool IsNew { get; set; } = false;
+    [Parameter] public bool IsOffline { get; set; } = false;
+    [Parameter] public bool IsReadOnly { get; set; } = false;
+    [Parameter] public ProjectItem? ProjectContext { get; set; }
+
+    // Pracovní proměnné pro formulář
+    private TaskItem task = new();
+    private TaskItem originalTask = new();
+    private MudForm form = null!;
+    private bool isValid;
+    private bool isNew;
+    private bool isOffline;
+    private bool hasChanges = false;
+
+    // Proměnné pro práci s termínem úkolu
+    private DateTime? dueDate;
+    private TimeSpan? dueTime;
+    private DateTime? originalDueDate;
+    private TimeSpan? originalDueTime;
+    private DateTime? maxDueDate;
+
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    protected override void OnInitialized()
+    {
+        task = Task.Clone();
+        originalTask = Task.Clone();
+        isNew = IsNew;
+        isOffline = IsOffline;
+
+        // Pro readonly režim nepotřebujeme sledovat změny
+        if (!IsReadOnly)
+        {
+            hasChanges = isNew;
+        }
+
+        if (ProjectContext != null && ProjectContext.DueDate.HasValue)
+        {
+            maxDueDate = ProjectContext.DueDate.Value.ToLocalTime().Date;
+        }
+
+        if (task.DueDate.HasValue)
+        {
+            DateTime localDateTime = task.DueDate.Value.ToLocalTime();
+            dueDate = localDateTime.Date;
+            dueTime = localDateTime.TimeOfDay;
+
+            originalDueDate = dueDate;
+            originalDueTime = dueTime;
+        }
+
+        if (maxDueDate.HasValue && dueDate.HasValue && dueDate.Value > maxDueDate.Value)
+        {
+            dueDate = maxDueDate.Value;
+        }
+    }
+
+    // POMOCNÉ METODY
+    private void CheckForChanges()
+    {
+        // Pro readonly režim nesledujeme změny
+        if (IsReadOnly) return;
+
+        if (isNew)
+        {
+            hasChanges = true;
+            return;
+        }
+
+        hasChanges = task.Title != originalTask.Title ||
+                     (task.Description ?? string.Empty) != (originalTask.Description ?? string.Empty) ||
+                     task.Status != originalTask.Status ||
+                     task.Priority != originalTask.Priority ||
+                     task.EnableDayReminder != originalTask.EnableDayReminder ||
+                     task.EnableHourReminder != originalTask.EnableHourReminder ||
+                     task.EnableMinuteReminder != originalTask.EnableMinuteReminder;
+
+        if (!hasChanges)
+        {
+            bool originalHasDate = originalTask.DueDate.HasValue;
+            bool currentHasDate = dueDate.HasValue;
+
+            if (originalHasDate != currentHasDate)
+            {
+                hasChanges = true;
+            }
+            else if (originalHasDate && currentHasDate && dueDate.HasValue)
+            {
+                if (!originalTask.DueDate.HasValue)
+                {
+                    return;
+                }
+
+                DateTime originalLocal = originalTask.DueDate.Value.ToLocalTime();
+
+                if (originalLocal.Date != dueDate.Value.Date)
+                {
+                    hasChanges = true;
+                }
+                else
+                {
+                    TimeSpan originalTimeOfDay = originalLocal.TimeOfDay;
+                    TimeSpan currentTimeOfDay = dueTime.HasValue
+                        ? dueTime.Value
+                        : new TimeSpan(23, 59, 59);
+
+                    if (originalTimeOfDay != currentTimeOfDay)
+                    {
+                        hasChanges = true;
+                    }
+                }
+            }
+        }
+
+        StateHasChanged();
+
+        if (!dueDate.HasValue)
+        {
+            task.EnableDayReminder = false;
+            task.EnableHourReminder = false;
+            task.EnableMinuteReminder = false;
+        }
+    }
+
+    // UI AKCE
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+        if (form.IsValid)
+        {
+            if (dueDate.HasValue)
+            {
+                DateTime combinedDateTime = dueDate.Value.Date;
+
+                if (!dueTime.HasValue)
+                {
+                    combinedDateTime = combinedDateTime.AddDays(1).AddSeconds(-1);
+                }
+                else
+                {
+                    combinedDateTime = combinedDateTime.Add(dueTime.Value);
+                }
+
+                combinedDateTime = DateTime.SpecifyKind(combinedDateTime, DateTimeKind.Local);
+                task.DueDate = combinedDateTime.ToUniversalTime();
+            }
+            else
+            {
+                task.DueDate = null;
+            }
+
+            MudDialog.Close(DialogResult.Ok(task));
+        }
+    }
+}

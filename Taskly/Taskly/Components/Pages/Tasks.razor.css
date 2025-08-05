@@ -1,0 +1,309 @@
+﻿/*STRÁNKA S ÚKOLY- STYLY */
+
+/*Hlavní kontejner stránky pro správu úkolů */
+::deep .tasks-page-container {
+    border-radius: 8px !important;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+/*HLAVIČKA STRÁNKY */
+/*Stylování hlavičky s ikonou a nadpisy */
+.tasks-header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Nadpis stránky úkolů */
+::deep .tasks-page-title {
+    font-weight: 600 !important;
+}
+
+/* Popis stránky úkolů */
+::deep .tasks-page-subtitle {
+    margin-top: 4px;
+}
+
+/* Akční tlačítka v hlavičce */
+.tasks-header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+/* Indikátor stavu připojení */
+.tasks-connection-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+}
+
+/* Avatar uživatele */
+::deep .tasks-user-avatar {
+    border: 2px solid var(--mud-palette-primary);
+}
+
+/*FILTRY A VYHLEDÁVÁNÍ */
+/*Kontejner pro filtry a vyhledávání */
+::deep .tasks-filters-container {
+    border-radius: 8px !important;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+/* Styly pro formulářové komponenty */
+::deep .tasks-search-field .mud-input-outlined .mud-input-outlined-border,
+::deep .tasks-filter-select .mud-input-outlined .mud-input-outlined-border {
+    border-radius: 6px !important;
+}
+
+/* Tlačítko pro vytvoření nového úkolu */
+::deep .tasks-create-button {
+    border-radius: 8px !important;
+    font-weight: 600;
+}
+
+/*STATISTICKÉ KARTY */
+/*Karty s přehledem úkolů podle stavu */
+::deep .tasks-stats-card {
+    border-radius: 8px !important;
+    border: 1px solid var(--mud-palette-lines-default);
+    background: var(--mud-palette-surface);
+}
+
+/* Ikony ve statistických kartách */
+.tasks-stats-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+}
+
+/* Čísla ve statistických kartách */
+::deep .tasks-stats-number {
+    font-weight: 600 !important;
+}
+
+/*TABULKA ÚKOLŮ */
+/*Hlavní kontejner tabulky */
+::deep .tasks-table-container {
+    border-radius: 8px !important;
+    border: 1px solid var(--mud-palette-lines-default);
+    overflow: hidden;
+    background: var(--mud-palette-surface);
+}
+
+/* Toolbar tabulky */
+.tasks-table-toolbar {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 16px 24px;
+    background: var(--mud-palette-background-grey) !important;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    gap: 12px;
+}
+
+/* Nadpis tabulky */
+::deep .tasks-table-title {
+    font-weight: 600 !important;
+}
+
+/* Indikátor synchronizace v tabulce */
+::deep .tasks-sync-indicator {
+    border-radius: 12px !important;
+    font-size: 0.75rem;
+}
+
+/* Hlavička tabulky */
+::deep .tasks-table-header {
+    background: var(--mud-palette-background-grey) !important;
+    font-weight: 600 !important;
+    border-bottom: 1px solid var(--mud-palette-lines-default) !important;
+}
+
+/* Buňky tabulky */
+::deep .tasks-table-cell {
+    border-bottom: 1px solid var(--mud-palette-lines-inputs) !important;
+    padding: 12px 24px;
+}
+
+/* Klikatelné řádky */
+::deep .tasks-clickable-row {
+    cursor: pointer !important;
+}
+
+/* Stránkování tabulky */
+::deep .tasks-table-pager,
+::deep .tasks-table-container .mud-table-pager,
+::deep .mud-table .mud-table-pager,
+::deep .mud-table-container .mud-table-pager,
+::deep div.mud-table-pager,
+::deep .mud-table .mud-table-container > div:last-child,
+::deep .tasks-table-container > div:last-child {
+    background: var(--mud-palette-background-grey) !important;
+    padding: 4px 24px !important;
+}
+
+/*OBSAH TABULKY */
+/*Stylování těla tabulky */
+::deep .tasks-data-table .mud-toolbar {
+    padding: 0 !important;
+    background: transparent !important;
+}
+
+::deep .mud-table tbody {
+    background: var(--mud-palette-surface) !important;
+}
+
+/*NÁZVY A POPISY ÚKOLŮ */
+/*Zkrácení dlouhých textů v tabulce */
+::deep .tasks-item-title {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 250px !important;
+    display: block !important;
+}
+
+::deep .tasks-item-description {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 200px !important;
+    display: block !important;
+}
+
+/* Prázdný popis */
+::deep .tasks-empty-description {
+    font-style: italic;
+    font-size: 0.875rem;
+}
+
+/* Text s datem */
+::deep .tasks-date-text {
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.875rem;
+}
+
+/*CHIPY A INDIKÁTORY */
+/*Styly pro různé chipy v tabulce */
+::deep .tasks-project-chip,
+::deep .tasks-date-chip,
+::deep .tasks-priority-chip,
+::deep .tasks-status-chip {
+    border-radius: 12px !important;
+    font-weight: 500 !important;
+}
+
+/* Název projektu v chipu */
+.tasks-project-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Text pro úkoly bez projektu */
+::deep .tasks-no-project {
+    font-style: italic;
+    font-size: 0.875rem;
+}
+
+/* Ikona synchronizace s animací */
+.tasks-sync-icon {
+    animation: spin 2s linear infinite;
+}
+
+/*AKČNÍ TLAČÍTKA */
+/*Tlačítka v hlavičce */
+::deep .tasks-action-button {
+    border-radius: 6px !important;
+}
+
+/* Skupina akčních tlačítek v tabulce */
+::deep .tasks-action-buttons {
+    gap: 5px;
+}
+
+/* Jednotlivá akční tlačítka v tabulce */
+::deep .tasks-table-action-button {
+    border-radius: 6px !important;
+}
+
+/*PRÁZDNÁ TABULKA */
+/*Obsah zobrazený při prázdné tabulce */
+.tasks-no-records {
+    text-align: center;
+    padding: 48px 24px;
+}
+
+/*RESPONZIVNÍ DESIGN PRO MOBILY */
+/*Přizpůsobení pro tablety a menší displeje */
+@media (max-width: 768px) {
+
+    ::deep .tasks-page-title {
+        font-size: 1.5rem !important;
+    }
+
+    .tasks-filters-container {
+        padding: 16px !important;
+    }
+
+    /* Table toolbar také zůstává v řádku - koš vedle nadpisu */
+    .tasks-table-toolbar {
+        padding: 12px 16px !important;
+        gap: 8px !important;
+        flex-wrap: wrap !important; /*Pro případ přetečení */
+    }
+
+    /* Ořezání názvů úkolů v tabulce na mobilech */
+    ::deep .tasks-item-title {
+        max-width: 180px !important;
+    }
+
+    /* Ořezání popisů úkolů v tabulce na mobilech */
+    ::deep .tasks-item-description {
+        max-width: 150px !important;
+    }
+
+    /* Ořezání názvů projektů na mobilech */
+    .tasks-project-name {
+        max-width: 100px !important;
+    }
+}
+
+/* Responzivní design pro velmi malé displeje */
+@media (max-width: 480px) {
+    /* Zkrácení názvů úkolů na velmi malých mobilech */
+    ::deep .tasks-item-title {
+        max-width: 120px !important;
+    }
+
+    /* Zkrácení popisů úkolů na velmi malých mobilech */
+    ::deep .tasks-item-description {
+        max-width: 100px !important;
+    }
+
+    /* Zkrácení názvů projektů na velmi malých mobilech */
+    .tasks-project-name {
+        max-width: 80px !important;
+    }
+}
+
+/*CSS ANIMACE PRO INDIKÁTORY */
+/*Rotační animace pro ikonu synchronizace */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}

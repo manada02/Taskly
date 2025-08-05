@@ -1,0 +1,185 @@
+﻿@* Potřebné namespace *@
+@namespace Taskly.Components.Layout
+@using Taskly.Services.UI;
+@using Taskly.Services.Auth
+@using Taskly.Components.Core
+@using Microsoft.Maui.Devices
+
+@* Dědičnost a implementace *@
+@inherits LayoutComponentBase
+@implements IDisposable
+
+@* Služby pro DI *@
+@inject ILogger<MainLayout> Logger
+@inject ConnectivityService ConnectivityService
+@inject IThemeService ThemeService
+
+<div>
+@* SYSTÉMOVÉ KOMPONENTY - inicializační a monitorovací komponenty bez UI *@
+<AuthInitializer />
+<MultiDeviceGuard />
+<NotificationRouter />
+<ConnectivityMonitor />
+<TaskInitializer />
+<DashboardInitializer />
+
+@* MUDBLAZOR PROVIDERY - potřebné pro fungování UI knihovny *@
+<MudThemeProvider Theme="ThemeService.CurrentTheme" IsDarkMode="isDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+        @* HORNÍ APLIKAČNÍ LIŠTA *@
+        <MudAppBar Elevation="1" Class="task-management-app-bar" Color="Color.Primary">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@ToggleNavMenu" />
+
+        <MudLink Href="/" Underline="Underline.None" Color="Color.Inherit" Class="ml-3">
+            <MudText Typo="Typo.h5" Style="font-weight: bold;">Taskly</MudText>
+        </MudLink>
+
+        <MudSpacer />
+
+        @* Indikátor offline režimu před ostatními ikonami *@
+        @if (IsOffline)
+        {
+            <MudBadge Icon="@Icons.Material.Filled.CloudOff" Color="Color.Error" Overlap="true" Class="mr-3">
+                <MudText Color="Color.Error" Class="font-weight-bold">Offline</MudText>
+            </MudBadge>
+        }
+
+        <span class="mr-2">
+        <NotificationCenter />
+         </span>
+        <ProfileButton />
+
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="@_drawerOpen" Elevation="2" ClipMode="DrawerClipMode.Always" Class="task-management-drawer">
+        <NavMenu />
+    </MudDrawer>
+
+     @* Hlavní obsah *@
+    <MudMainContent Class="task-management-main-content">
+        <MudContainer MaxWidth="MaxWidth.False" Class="pa-6">
+          @Body          @* (sem se renderují stránky jako Nastavení, Statistiky, atd.) *@
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+</div>
+
+@code {
+    // PROMĚNNÉ A VLASTNOSTI
+    // Základní proměnné pro správu stavu UI
+    private bool isDarkMode;
+    private bool _drawerOpen = false;
+    private bool IsOffline;
+    private System.Threading.Timer? _statusTimer;
+
+    // UI AKCE
+    // Přepínání postranního menu - používáme na desktopu místo hamburger menu
+    private void ToggleNavMenu()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    // Inicializace layoutu - nastavení témat, stavu připojení a timerů
+    protected override async Task OnInitializedAsync()
+    {
+        // Inicializujeme téma aplikace
+        await ThemeService.InitializeAsync();
+        isDarkMode = ThemeService.IsDarkMode;
+
+        // Přihlásíme se k událostem změny tématu
+        ThemeService.DarkModeChanged += OnDarkModeChanged;
+        ThemeService.PrimaryColorChanged += OnThemePropertyChanged;
+        ThemeService.DensityChanged += OnThemePropertyChanged;
+
+        // Nastavíme počáteční stav podle aktuálního připojení
+        IsOffline = !ConnectivityService.IsConnected;
+
+        // Přihlásíme se k odběru změn připojení
+        ConnectivityService.ConnectivityChanged += OnConnectivityChanged;
+
+        // Spustíme timer pro pravidelnou kontrolu offline stavu
+        // Tohle slouží jako záloha, kdyby selhal event ConnectivityChanged
+        _statusTimer = new System.Threading.Timer(_ =>
+        {
+            CheckOfflineStatus();
+        }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+
+    // EVENT HANDLERY
+    // Zpracování změny barvy nebo hustoty tématu
+    private void OnThemePropertyChanged(string _)
+    {
+        // Vynutíme překreslení komponenty při změně tématu
+        StateHasChanged();
+    }
+
+    // Zpracování změny stavu připojení z ConnectivityService
+    private void OnConnectivityChanged(bool isConnected)
+    {
+        // Aktualizujeme stav offline přímo ze služby
+        InvokeAsync(() =>
+        {
+            IsOffline = !isConnected;
+            StateHasChanged();
+        });
+    }
+
+    // Zpracování změny světlého/tmavého režimu
+    private void OnDarkModeChanged(bool newValue)
+    {
+        isDarkMode = newValue;
+        StateHasChanged();
+    }
+
+    // KONTROLA STAVU PŘIPOJENÍ
+    // Pravidelná kontrola offline stavu - kombinace dat z úložiště a aktuálního stavu
+    private async void CheckOfflineStatus()
+    {
+        try
+        {
+            // Kombinujeme kontrolu z SecureStorage a aktuálního stavu připojení
+            var offlineStateFromStorage = await SecureStorage.GetAsync("is_offline_mode") == "true";
+            var currentOfflineState = !ConnectivityService.IsConnected;
+
+            // Jsme offline, pokud to říká úložiště nebo aktuální stav
+            var newOfflineState = offlineStateFromStorage || currentOfflineState;
+
+            // Aktualizujeme stav jen pokud došlo ke změně - šetříme výkon
+            if (IsOffline != newOfflineState)
+            {
+                IsOffline = newOfflineState;
+                await InvokeAsync(StateHasChanged);
+
+                // Aktualizujeme hodnotu v SecureStorage, pokud je potřeba
+                if (offlineStateFromStorage != currentOfflineState)
+                {
+                    await SecureStorage.SetAsync("is_offline_mode", currentOfflineState.ToString().ToLower());
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Chyba při kontrole offline stavu");
+        }
+    }
+
+    // UVOLNĚNÍ ZDROJŮ
+    // Uvolní zdroje komponenty - odregistruje event handlery pro předejití memory leaků
+    public void Dispose()
+    {
+        ThemeService.DarkModeChanged -= OnDarkModeChanged;
+        ThemeService.PrimaryColorChanged -= OnThemePropertyChanged;
+        ThemeService.DensityChanged -= OnThemePropertyChanged;
+        ConnectivityService.ConnectivityChanged -= OnConnectivityChanged;
+
+        // Uvolníme timer pro kontrolu stavu
+        _statusTimer?.Dispose();
+    }
+}
+
+

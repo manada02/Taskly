@@ -1,0 +1,189 @@
+/*DASHBOARD STYLY */
+
+/*Hlavní kontejner celého dashboardu */
+::deep .dashboard-container {
+	border-radius: 8px !important;
+	background: var(--mud-palette-surface);
+	border: 1px solid var(--mud-palette-lines-default);
+}
+
+/* Stylování hlavièky dashboardu */
+::deep .header-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+/* Logo aplikace v dashboardu */
+::deep .dashboard-app-logo {
+	border-radius: 6px;
+}
+
+::deep .dashboard-title {
+	font-weight: 600 !important;
+}
+
+::deep .dashboard-subtitle {
+	margin-top: 4px;
+}
+
+::deep .header-actions {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+/* Indikátor stavu pøipojení */
+::deep .connection-status {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 4px;
+}
+
+/* Animovaný chip pro synchronizaci */
+::deep .sync-chip {
+	animation: pulse 2s infinite;
+}
+
+/* Karty se statistikami úkolù */
+::deep .stats-card {
+	border-radius: 8px !important;
+	border: 1px solid var(--mud-palette-lines-default);
+	background: var(--mud-palette-surface);
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+::deep .stats-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+::deep .stats-icon {
+	padding: 12px;
+}
+
+::deep .stats-number {
+	font-weight: 600 !important;
+}
+
+/* Kontejnery pro obsah dashboardu */
+::deep .content-container {
+	border-radius: 8px !important;
+	border: 1px solid var(--mud-palette-lines-default);
+	overflow: hidden;
+	background: var(--mud-palette-surface);
+}
+
+::deep .actions-container {
+	border-radius: 8px !important;
+	background: var(--mud-palette-background-grey);
+	border: 1px solid var(--mud-palette-lines-default);
+}
+
+/* Zkrácení dlouhých názvù úkolù */
+::deep .task-title {
+	white-space: nowrap !important;
+	overflow: hidden !important;
+	text-overflow: ellipsis !important;
+	display: block !important;
+}
+
+/* Stylování chipù s datumy */
+::deep .date-chip {
+	border-radius: 12px !important;
+	font-weight: 500 !important;
+}
+
+/* Akèní tlaèítka s hover efektem */
+::deep .action-button {
+	border-radius: 8px !important;
+	font-weight: 600;
+	transition: all 0.2s ease;
+}
+
+::deep .action-button:hover {
+	transform: translateY(-1px);
+}
+
+/* Klikatelné položky v seznamech */
+.mud-list-item.clickable-item:hover {
+	background: var(--mud-palette-background-grey) !important;
+}
+
+::deep .list-item {
+	border-bottom: 1px solid var(--mud-palette-lines-inputs) !important;
+	padding: 12px 24px;
+}
+
+/* Pøizpùsobení Timeline komponenty */
+::deep .mud-timeline .mud-timeline-item .mud-timeline-item-content {
+	padding-left: 16px !important;
+}
+
+::deep .mud-timeline .mud-timeline-item:last-child .mud-timeline-item-content {
+	padding-bottom: 0 !important;
+}
+
+/* Responzivní design pro mobily */
+@media (max-width: 768px) {
+
+	::deep .header-actions {
+		gap: 8px !important;
+	}
+
+	::deep .dashboard-title {
+		font-size: 1.3rem !important;
+	}
+
+	/* Logo aplikace v dashboardu je menší na mobilech */
+	::deep .dashboard-app-logo {
+		width: 36px !important;
+		height: 36px !important;
+	}
+
+	::deep .mud-timeline .mud-timeline-item .mud-timeline-item-content {
+		padding-left: 12px !important;
+	}
+
+	::deep .task-title {
+		max-width: 200px !important;
+	}
+}
+
+/* Responzivní design pro velmi malé displeje */
+@media (max-width: 480px) {
+
+	::deep .dashboard-app-logo {
+		width: 32px !important;
+		height: 32px !important;
+	}
+
+	::deep .task-title {
+		max-width: 150px !important;
+	}
+
+	::deep .stats-card .mud-stack-row {
+		flex-direction: column !important;
+		text-align: center;
+	}
+
+	::deep .stats-icon {
+		padding: 8px !important;
+	}
+}
+
+/* CSS animace pro upozoròující efekty */
+@keyframes pulse {
+	0% {
+		opacity: 1;
+	}
+
+	50% {
+		opacity: 0.7;
+	}
+
+	100% {
+		opacity: 1;
+	}
+}

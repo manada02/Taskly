@@ -1,0 +1,157 @@
+﻿@* Potřebné namespace *@
+@using Taskly.Services.Auth
+@using Microsoft.Extensions.Logging
+@using Microsoft.Maui.Storage
+
+@* Služby pro DI *@
+@inject NavigationManager NavigationManager
+@inject FirebaseAuthService FirebaseAuthService
+@inject ILogger<AuthInitializer> Logger
+@inject ISnackbar Snackbar
+@inject ConnectivityService ConnectivityService
+@inject INotificationService NotificationService
+
+@* Prázdný element - komponenta nemá UI, pouze zpracovává inicializaci a správu autentizace včetně online/offline stavů *@
+<div></div>
+
+@code {
+    // Inicializace při načtení komponenty - kontroluje stav autentizace
+    // Tohle byla asi nejsložitější část celého projektu, musel jsem řešit online/offline stavy
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var currentUrl = NavigationManager.Uri;
+            Logger.LogInformation($"AuthInitializer: Začínám inicializaci. Aktuální URL: {currentUrl}");
+
+            // Pokud jsme na login stránce, neprovádíme žádné další akce
+            if (currentUrl.EndsWith("/login"))
+            {
+                Logger.LogInformation("AuthInitializer: Jsme na login stránce, přeskakuji inicializaci");
+                return;
+            }
+
+            // Zkontrolujeme, zda je uživatel přihlášen - tohle je rychlá kontrola ze SecureStorage
+            var quickCheck = await SecureStorage.GetAsync("user_logged_in");
+            Logger.LogInformation($"AuthInitializer: Rychlý test - user_logged_in = {quickCheck}");
+
+            if (quickCheck == "true")
+            {
+                // Zkontrolujeme stav připojení - musí fungovat i offline
+                bool isOnline = ConnectivityService.IsConnected;
+                Logger.LogInformation($"AuthInitializer: Stav připojení - {(isOnline ? "online" : "offline")}");
+
+                if (!isOnline)
+                {
+                    // Jsme offline, ale uživatel byl přihlášen - nastavit offline režim
+                    await HandleOfflineAuthentication();
+                    return;
+                }
+
+                // Jsme online, pokračujeme standardním způsobem
+                Logger.LogInformation("AuthInitializer: Nalezeno rychlé přihlášení, spouštím autentizaci na pozadí");
+
+                // Okamžitá notifikace o probíhajícím procesu - perzistentní toast
+                NotificationService.ShowPersistentToast("Obnovuji přihlášení...", NotificationType.Info);
+
+                // Autentizace na pozadí - aby se neblokoval UI thread
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        Logger.LogInformation("AuthInitializer: Začínám autentizaci na pozadí");
+                        bool isAuthenticated = await FirebaseAuthService.TryRestoreSessionAsync();
+                        Logger.LogInformation($"AuthInitializer: Autentizace na pozadí dokončena: {isAuthenticated}");
+
+                        await InvokeAsync(() =>
+                        {
+                            // Nejprve odstraníme perzistentní notifikaci
+                            NotificationService.RemovePersistentToast();
+
+                            if (isAuthenticated)
+                            {
+                                FirebaseAuthService.StartTokenRefreshTimer();
+                                // Úspěšná autentizace - uložíme do historie
+                                NotificationService.ShowToast("Přihlášení bylo úspěšně obnoveno", NotificationType.Success);
+                            }
+                            else
+                            {
+                                // Selhání autentizace - pouze zobrazíme toast
+                                NotificationService.ShowToast("Obnova přihlášení selhala", NotificationType.Warning);
+                            }
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "AuthInitializer: Chyba při asynchronní inicializaci");
+                        await InvokeAsync(() =>
+                        {
+                            // V případě chyby také odstraníme perzistentní notifikaci
+                            NotificationService.RemovePersistentToast();
+
+                            NotificationService.ShowToast("Došlo k chybě při ověřování", NotificationType.Error);
+                        });
+                    }
+                });
+
+                return; // okamžitě ukončit a nechání UI vykreslit
+            }
+
+            // Zkontrolojeme stav připojení pro standardní cestu
+            bool isConnected = ConnectivityService.IsConnected;
+
+            if (!isConnected)
+            {
+                // Jsme offline a nemáme flag pro rychlé přihlášení - nepřihlášený stav
+                Logger.LogInformation("AuthInitializer: Offline režim bez předchozího přihlášení");
+                await SecureStorage.SetAsync("is_offline_mode", "true");
+                return;
+            }
+
+            // pokud nebyl nastaven flag, pokračovat běžnou cestou
+            Logger.LogInformation("AuthInitializer: Nenalezeno rychlé přihlášení, použiji standardní cestu");
+            bool isAuthenticated = await FirebaseAuthService.TryRestoreSessionAsync();
+            Logger.LogInformation($"AuthInitializer: Stav autentizace: {isAuthenticated}");
+
+            if (isAuthenticated)
+            {
+                // Po úspěšném přihlášení nastavit flag pro příště
+                await SecureStorage.SetAsync("user_logged_in", "true");
+                var flagResult = await SecureStorage.GetAsync("user_logged_in");
+                Logger.LogInformation($"AuthInitializer: Nastaven flag pro příští rychlé přihlášení: {flagResult}");
+
+                FirebaseAuthService.StartTokenRefreshTimer();
+                // Úspěšná standardní autentizace - uložit do historie
+                NotificationService.ShowToast("Přihlášení bylo úspěšně obnoveno", NotificationType.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "AuthInitializer: Chyba při inicializaci");
+            NotificationService.ShowToast("Došlo k chybě při ověřování", NotificationType.Error);
+        }
+    }
+
+    //POMOCNÉ METODY
+    // Zpracování situace, kdy je uživatel offline, ale byl předtím přihlášen
+    // Dal jsem to do samostatné metody, aby byl kód čitelnější
+    private async Task HandleOfflineAuthentication()
+    {
+        Logger.LogInformation("AuthInitializer: Zpracování offline autentizace");
+
+        // Nastavíme příznaky pro offline režim s přihlášením
+        await SecureStorage.SetAsync("is_offline_mode", "true");
+        await SecureStorage.SetAsync("is_offline_authenticated", "true");
+
+        // Informujeme uživatele o offline režimu
+        NotificationService.ShowToast("Pracujete v offline režimu. Některé funkce mohou být nedostupné.",
+                                      NotificationType.Info);
+
+        // Vyvoláme událost pro informování ostatních částí aplikace
+        // že je uživatel "přihlášen", ale v offline režimu
+        FirebaseAuthService.NotifyAuthenticationStateChanged(true);
+
+        Logger.LogInformation("AuthInitializer: Offline autentizace dokončena");
+    }
+}
+

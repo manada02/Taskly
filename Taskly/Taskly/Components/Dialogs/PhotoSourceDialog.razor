@@ -1,0 +1,39 @@
+﻿@* Služby pro DI *@
+@inject IDialogService DialogService
+
+@* UI komponenta dialogu pro výběr zdroje fotografie *@
+<MudDialog>
+    <DialogContent>
+        <MudStack>
+            <MudButton FullWidth="true"
+                       Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.PhotoCamera"
+                       OnClick="@(() => Submit("camera"))">
+                Pořídit novou fotografii
+            </MudButton>
+            <MudButton FullWidth="true"
+                       Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.PhotoLibrary"
+                       OnClick="@(() => Submit("gallery"))">
+                Vybrat z galerie
+            </MudButton>
+        </MudStack>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    // PARAMETRY DIALOGU
+    // Kaskádový parametr pro dialog - MudBlazor ho automaticky nastaví
+    [CascadingParameter]
+    MudDialogInstance? MudDialog { get; set; }
+
+    // UI AKCE
+    // Zpracování výběru zdroje fotografie a vrácení výsledku
+    // Tohle se zavolá po kliknutí na jedno z tlačítek
+    private void Submit(string choice)
+    {
+        // Vrátíme vybranou hodnotu zpět volajícímu kódu
+        // "camera" nebo "gallery" - podle toho se pak použije správné API pro fotky
+        MudDialog?.Close(DialogResult.Ok(choice));
+    }
+}

@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!-- Splash screen pro Android - zobrazuje se při spuštění aplikace -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Fialové pozadí -->
+  <item>
+    <shape android:shape="rectangle">
+      <solid android:color="#512BD4" />
+    </shape>
+  </item>
+
+  <!-- Logo uprostřed obrazovky -->
+  <item android:gravity="center">
+    <bitmap android:src="@drawable/taskly_logo_splash" />
+  </item>
+</layer-list>

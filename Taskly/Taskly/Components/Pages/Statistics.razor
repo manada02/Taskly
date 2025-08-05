@@ -1,0 +1,797 @@
+﻿@* Namespace a importy *@
+@page "/statistics"
+@using Taskly.Models
+@using Taskly.Services.Tasks
+@using Taskly.Services.Projects
+@using System.Linq
+
+@* Služby pro DI *@
+@inject ITaskService TaskService
+@inject IProjectService ProjectService
+@inject INotificationService NotificationService
+
+@* Hlavní kontejner stránky statistik *@
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudPaper Elevation="3" Class="pa-4 statistics-page-container">
+
+        @* Hlavička stránky s nadpisem a tlačítkem obnovení *@
+        <MudStack Row AlignItems="AlignItems.Center" Class="mb-4 statistics-header">
+            <MudIcon Icon="@Icons.Material.Filled.BarChart"
+                     Size="Size.Large"
+                     Color="Color.Primary"
+                     Style="font-size: 3rem;" />
+
+            <MudText Typo="Typo.h4" Class="statistics-page-title ml-3">Statistiky</MudText>
+            <MudSpacer />
+            <MudTooltip Text="Obnovit data">
+                <MudIconButton Icon="@Icons.Material.Filled.Refresh"
+                               Color="Color.Primary"
+                               OnClick="LoadDataAsync"
+                               Disabled="@isLoading"
+                               Class="statistics-refresh-button" />
+            </MudTooltip>
+        </MudStack>
+
+        @* Indikátor načítání dat *@
+        @if (isLoading)
+        {
+            <MudProgressLinear Indeterminate="true" Class="my-7 statistics-loading" />
+        }
+        else
+        {
+            @* Hlavní mřížka s grafy *@
+            <MudGrid Class="statistics-charts-grid">
+
+                @* Graf úkolů podle stavu *@
+                <MudItem xs="12" sm="12" md="6">
+                    <MudPaper Elevation="2" Class="pa-4 statistics-chart-container" Style="min-height: 280px; height: 100%; overflow: hidden;">
+                        @* Hlavička grafu s nadpisem a souhrnem *@
+                        <MudGrid Spacing="2" Class="mb-3 statistics-chart-header">
+                            <MudItem xs="12" sm="7">
+                                <MudText Typo="Typo.h6" Class="statistics-chart-title">Úkoly podle stavu</MudText>
+                            </MudItem>
+                            @* Chip se souhrnem vybraných dat *@
+                            <MudItem xs="12" sm="5" Class="d-flex justify-start justify-sm-end align-center">
+                                <MudChip T="string"
+                                            Icon="@(selectedStatusIndex < 0 ? Icons.Material.Filled.DataUsage : GetStatusIcon(selectedStatusIndex))"
+                                            @attributes="GetChipAttributes(selectedStatusIndex, GetStatusColor)"
+                                            Size="Size.Small"
+                                            Class="statistics-summary-chip">
+                                    @if (selectedStatusIndex < 0)
+                                    {
+                                        <span>Celkem: @tasksByStatusData.Sum() úkolů</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@(tasksByStatusLabels[selectedStatusIndex].Split('(')[0].Trim()): @tasksByStatusData[selectedStatusIndex] úkolů</span>
+                                    }
+                                </MudChip>
+                            </MudItem>
+                        </MudGrid>
+
+                        @* Koláčový graf nebo prázdný stav *@
+                        <MudElement HtmlTag="div" Class="d-flex justify-center align-center statistics-chart-area" Style="min-height: 220px; position: relative;">
+                            @if (tasksByStatusData.Length > 0 && tasksByStatusData.Any(d => d > 0))
+                            {
+                                <MudChart ChartType="ChartType.Pie"
+                                            Style="max-width: 100%; max-height: 100%;"
+                                            Width="100%" Height="220px"
+                                            ChartOptions="@(new ChartOptions { ChartPalette = new string[] {
+                                                "var(--mud-palette-info)",
+                                                "var(--mud-palette-warning)",
+                                                "var(--mud-palette-success)",
+                                                "var(--mud-palette-secondary)",
+                                                "var(--mud-palette-error)"
+                                            } })"
+                                            InputData="@tasksByStatusData"
+                                            InputLabels="@tasksByStatusLabels"
+                                            @bind-SelectedIndex="selectedStatusIndex"
+                                            Class="statistics-pie-chart" />
+                            }
+                            else
+                            {
+                                <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Class="statistics-empty-state">
+                                    <MudIcon Icon="@Icons.Material.Filled.DataUsage" Color="Color.Default" Size="Size.Large" />
+                                    <MudText Typo="Typo.h6" Align="Align.Center" Class="mud-text-secondary">Nejsou k dispozici žádná data</MudText>
+                                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                                        Vytvořte nějaké úkoly pro zobrazení statistik
+                                    </MudText>
+                                </MudStack>
+                            }
+                        </MudElement>
+                    </MudPaper>
+                </MudItem>
+
+                @* Graf úkolů podle priority *@
+                <MudItem xs="12" sm="12" md="6">
+                    <MudPaper Elevation="2" Class="pa-4 statistics-chart-container" Style="min-height: 280px; height: 100%; overflow: hidden;">
+                        @* Hlavička grafu s nadpisem a souhrnem *@
+                        <MudGrid Spacing="2" Class="mb-3 statistics-chart-header">
+                            <MudItem xs="12" sm="7">
+                                <MudText Typo="Typo.h6" Class="statistics-chart-title">Úkoly podle priority</MudText>
+                            </MudItem>
+                            @* Chip se souhrnem vybraných dat *@
+                            <MudItem xs="12" sm="5" Class="d-flex justify-start justify-sm-end align-center">
+                                <MudChip T="string"
+                                            Icon="@(selectedPriorityIndex < 0 ? Icons.Material.Filled.DataUsage : GetPriorityIcon(selectedPriorityIndex))"
+                                            @attributes="GetChipAttributes(selectedPriorityIndex, GetPriorityColor)"
+                                            Size="Size.Small"
+                                            Class="statistics-summary-chip">
+                                    @if (selectedPriorityIndex < 0)
+                                    {
+                                        <span>Celkem: @tasksByPriorityData.Sum() úkolů</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@(tasksByPriorityLabels[selectedPriorityIndex].Split('(')[0].Trim()): @tasksByPriorityData[selectedPriorityIndex] úkolů</span>
+                                    }
+                                </MudChip>
+                            </MudItem>
+                        </MudGrid>
+
+                        @* Prstencový graf nebo prázdný stav *@
+                        <MudElement HtmlTag="div" Class="d-flex justify-center align-center statistics-chart-area" Style="min-height: 220px; position: relative;">
+                            @if (tasksByPriorityData.Length > 0 && tasksByPriorityData.Any(d => d > 0))
+                            {
+                                <MudChart ChartType="ChartType.Donut"
+                                            Style="max-width: 100%; max-height: 100%;"
+                                            Width="100%" Height="220px"
+                                            ChartOptions="@(new ChartOptions {
+                                                ChartPalette = new string[] {
+                                                    "var(--mud-palette-success)",
+                                                    "var(--mud-palette-warning)",
+                                                    "var(--mud-palette-error)",
+                                                    "var(--mud-palette-dark)"
+                                                }
+                                            })"
+
+                                            InputData="@tasksByPriorityData"
+                                            InputLabels="@tasksByPriorityLabels"
+                                            @bind-SelectedIndex="selectedPriorityIndex"
+                                            Class="statistics-donut-chart" />
+                            }
+                            else
+                            {
+                                <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Class="statistics-empty-state">
+                                    <MudIcon Icon="@Icons.Material.Filled.PieChart" Color="Color.Default" Size="Size.Large" />
+                                    <MudText Typo="Typo.h6" Align="Align.Center" Class="mud-text-secondary">Nejsou k dispozici žádná data</MudText>
+                                    <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                                        Přidejte úkoly s různými prioritami pro zobrazení grafu
+                                    </MudText>
+                                </MudStack>
+                            }
+                        </MudElement>
+                    </MudPaper>
+                </MudItem>
+
+                @* Graf top projektů podle počtu úkolů *@
+                <MudItem xs="12" sm="12" md="10" Class="mx-auto">
+                    <MudPaper Elevation="2" Class="pa-4 statistics-chart-container" Style="min-height: 320px; overflow: hidden;">
+                        @* Hlavička grafu s nadpisem a souhrnem *@
+                        <MudGrid Spacing="2" Class="mb-3 statistics-chart-header">
+                            <MudItem xs="12" sm="7">
+                                <MudText Typo="Typo.h6" Class="statistics-chart-title">Top projekty podle počtu úkolů</MudText>
+                            </MudItem>
+                            @* Chip se souhrnem vybraných dat *@
+                            <MudItem xs="12" sm="5" Class="d-flex justify-start justify-sm-end align-center">
+                                <MudChip T="string"
+                                            Icon="@GetDisplayIcon()"
+                                            @attributes="GetChipAttributes(GetProjectDisplayIndex(), GetProjectDisplayColor)"
+                                            Size="Size.Small"
+                                            Class="statistics-summary-chip">
+                                    @if (string.IsNullOrEmpty(selectedProjectName))
+                                    {
+                                        <span>Celkem: @GetTotalProjectTasks() úkolů</span>
+                                    }
+                                    else
+                                    {
+                                        <span>
+                                            @GetTruncatedName(selectedProjectName, 15)
+                                            @(string.IsNullOrEmpty(selectedPriorityName) ? "" : $"- {selectedPriorityName}"):
+                                            @GetFilteredTaskCount() úkolů
+                                            (@Math.Round(GetFilteredTaskCount() * 100.0 / GetTotalProjectTasks())%)
+                                        </span>
+                                    }
+                                </MudChip>
+                            </MudItem>
+                        </MudGrid>
+
+                        @* Sloupcový graf s filtry nebo prázdný stav *@
+                        @if (projectsChartSeries.Count > 0 && projectsChartSeries.Any(s => s.Data.Any(d => d > 0)))
+                        {
+                            <MudGrid Class="statistics-projects-content">
+                                @* Sloupcový graf na levé straně *@
+                                <MudItem xs="12" md="7" Class="statistics-chart-section" Style="min-height: 240px;">
+                                    <MudElement HtmlTag="div" Class="statistics-chart-wrapper" Style="width: 100%; overflow-x: auto;">
+                                        <MudChart ChartType="ChartType.StackedBar"
+                                                    Width="100%" Height="240px"
+                                                    ChartSeries="@projectsChartSeries"
+                                                    XAxisLabels="@GetTruncatedProjectLabels()"
+                                                    ChartOptions="@(new ChartOptions {
+                                                        ChartPalette = new string[] {
+                                                        "var(--mud-palette-success)",
+                                                        "var(--mud-palette-warning)",
+                                                        "var(--mud-palette-error)",
+                                                        "var(--mud-palette-dark)"
+                                                    },
+                                                        YAxisTicks = 4,
+                                                        YAxisLines = true,
+                                                        XAxisLines = false,
+                                                        ShowLegend = true,
+                                                    })"
+                                                    Class="statistics-bar-chart" />
+                                    </MudElement>
+                                </MudItem>
+
+                                @* Panel s filtry na pravé straně *@
+                                <MudItem xs="12" md="5" Class="statistics-filters-section">
+                                    <MudCard Elevation="0" Class="pa-3 statistics-filters-container" Style="background-color: rgba(0,0,0,0.03); border-radius: 8px;">
+                                        @* Filtry projektů *@
+                                        <MudElement HtmlTag="div" Class="mb-3 statistics-filter-group">
+                                            <MudText Typo="Typo.subtitle2" Class="mb-2 font-weight-medium statistics-filter-label">Projekty:</MudText>
+                                            <MudElement HtmlTag="div" Class="d-flex flex-wrap statistics-filter-chips">
+                                                @* Chip pro zobrazení všech projektů *@
+                                                <MudElement HtmlTag="div" Class="pa-1">
+                                                    <MudChip T="string" Text="VŠECHNY"
+                                                                Color="@(string.IsNullOrEmpty(selectedProjectName) ? Color.Default : Color.Transparent)"
+                                                                Variant="@(string.IsNullOrEmpty(selectedProjectName) ? Variant.Filled : Variant.Outlined)"
+                                                                OnClick="@(() => { selectedProjectName = ""; selectedPriorityName = ""; })"
+                                                                Size="Size.Small"
+                                                                Class="statistics-filter-chip" />
+                                                </MudElement>
+
+                                                @* Chipy pro jednotlivé projekty *@
+                                                @for (int i = 0; i < projectsTaskCountLabels.Length; i++)
+                                                {
+                                                    var projectName = projectsTaskCountLabels[i];
+
+                                                    @* Zobrazit pouze projekty s alespoň jedním úkolem *@
+                                                    if (GetTaskCountForProjectIndex(i) > 0)
+                                                    {
+                                                        var color = GetProjectColorByName(projectName);
+                                                        var isSelected = selectedProjectName == projectName;
+                                                        var displayName = GetTruncatedName(projectName, 20);
+
+                                                        <MudElement HtmlTag="div" Class="pa-1">
+                                                            <MudTooltip Text="@projectName" Placement="Placement.Top" Style="max-width: 300px; white-space: normal; word-break: break-word;">
+                                                                <MudChip T="string" Text="@displayName"
+                                                                            Style="@(GetChipStyle(isSelected, color) + "; max-width: 150px; overflow: hidden; text-overflow: ellipsis;")"
+                                                                            Variant="@(isSelected ? Variant.Filled : Variant.Outlined)"
+                                                                            OnClick="@(() => SelectProject(projectName))"
+                                                                            Size="Size.Small"
+                                                                            Class="statistics-project-chip" />
+                                                            </MudTooltip>
+                                                        </MudElement>
+                                                    }
+                                                }
+                                            </MudElement>
+                                        </MudElement>
+
+                                        @* Filtry priorit - zobrazují se pouze když je vybrán projekt *@
+                                        @if (!string.IsNullOrEmpty(selectedProjectName))
+                                        {
+                                            <MudDivider Class="statistics-filter-divider" />
+                                            <MudElement HtmlTag="div" Class="mt-3 statistics-filter-group">
+                                                <MudText Typo="Typo.subtitle2" Class="mb-2 font-weight-medium statistics-filter-label">Priority:</MudText>
+                                                <MudElement HtmlTag="div" Class="d-flex flex-wrap statistics-filter-chips">
+                                                    @{
+                                                        int projectIndex = Array.IndexOf(projectsTaskCountLabels, selectedProjectName);
+                                                        var availablePriorities = new List<string>();
+
+                                                        @* Získání dostupných priorit pro vybraný projekt *@
+                                                        foreach (var series in projectsChartSeries)
+                                                        {
+                                                            if (projectIndex >= 0 && projectIndex < series.Data.Length && series.Data[projectIndex] > 0)
+                                                            {
+                                                                availablePriorities.Add(series.Name);
+                                                            }
+                                                        }
+
+                                                        @* Zobrazení chipů pro dostupné priority *@
+                                                        foreach (var priorityName in availablePriorities)
+                                                        {
+                                                            var color = priorityName switch
+                                                            {
+                                                                "Nízká" => "var(--mud-palette-success)",
+                                                                "Střední" => "var(--mud-palette-warning)",
+                                                                "Vysoká" => "var(--mud-palette-error)",
+                                                                "Kritická" => "var(--mud-palette-dark)",
+                                                                _ => "#9E9E9E"
+                                                            };
+                                                            var isSelected = selectedPriorityName == priorityName;
+                                                            var icon = GetPriorityIcon(Array.IndexOf(new[] { "Nízká", "Střední", "Vysoká", "Kritická" }, priorityName));
+
+                                                            <MudElement HtmlTag="div" Class="pa-1">
+                                                                <MudChip T="string"
+                                                                         Text="@priorityName.ToUpper()"
+                                                                         Icon="@icon"
+                                                                         Style="@GetChipStyle(isSelected, color)"
+                                                                         Variant="@(isSelected ? Variant.Filled : Variant.Outlined)"
+                                                                         OnClick="@(() => SelectPriority(priorityName))"
+                                                                         Size="Size.Small"
+                                                                         Class="statistics-priority-chip" />
+                                                            </MudElement>
+                                                        }
+                                                    }
+                                                </MudElement>
+                                            </MudElement>
+                                        }
+                                    </MudCard>
+                                </MudItem>
+                            </MudGrid>
+                        }
+                        else
+                        {
+                            @* Prázdný stav když nejsou data o projektech *@
+                            <MudItem xs="12" Class="statistics-empty-projects" Style="min-height: 240px">
+                                <MudElement HtmlTag="div" Class="d-flex justify-center align-center statistics-chart-area" Style="height: 100%">
+                                    <MudStack AlignItems="AlignItems.Center" Justify="Justify.Center" Class="statistics-empty-state">
+                                        <MudIcon Icon="@Icons.Material.Filled.StackedBarChart" Color="Color.Default" Size="Size.Large" />
+                                        <MudText Typo="Typo.h6" Align="Align.Center" Class="mud-text-secondary">Nejsou k dispozici žádná data</MudText>
+                                        <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary">
+                                            Vytvořte projekty a přiřaďte k nim úkoly pro zobrazení statistik
+                                        </MudText>
+                                    </MudStack>
+                                </MudElement>
+                            </MudItem>
+                        }
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    // PROMĚNNÉ A VLASTNOSTI
+    // Proměnná pro indikaci načítání dat
+    private bool isLoading = true;
+
+    // Data pro graf úkolů podle stavu
+    private double[] tasksByStatusData = Array.Empty<double>();
+    private string[] tasksByStatusLabels = Array.Empty<string>();
+
+    // Data pro graf úkolů podle priority
+    private double[] tasksByPriorityData = Array.Empty<double>();
+    private string[] tasksByPriorityLabels = Array.Empty<string>();
+
+    // Data pro graf projektů a jejich úkolů
+    private List<ChartSeries> projectsChartSeries = new List<ChartSeries>();
+    private string[] projectsTaskCountLabels = Array.Empty<string>();
+    private double[] projectsTaskCountData = Array.Empty<double>();
+
+    // Proměnné pro sledování vybraných segmentů v grafech
+    private int selectedStatusIndex = -1;
+    private int selectedPriorityIndex = -1;
+    private string selectedProjectName = "";
+    private string selectedPriorityName = "";
+
+    // ŽIVOTNÍ CYKLUS KOMPONENTY
+    // Inicializace komponenty - načtení dat pro grafy
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    // NAČÍTÁNÍ DAT
+    // Načtení všech dat pro statistické grafy
+    private async Task LoadDataAsync()
+    {
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            // Načteme data z databáze
+            var tasks = await TaskService.GetTasksAsync();
+            var projects = await ProjectService.GetProjectsAsync();
+            var taskCountsByProject = await ProjectService.GetTaskCountsForAllProjectsAsync();
+
+            // Zpracujeme úkoly podle stavu
+            var allStatuses = Enum.GetValues(typeof(TaskItemStatus)).Cast<TaskItemStatus>();
+            var tasksByStatus = allStatuses.Select(s => new
+            {
+                Status = s,
+                Count = tasks.Count(t => t.Status == s)
+            }).ToList();
+
+            tasksByStatusData = tasksByStatus.Select(g => (double)g.Count).ToArray();
+
+            // Připravíme popisky pro graf stavů včetně procent
+            var totalTasks = tasksByStatusData.Sum();
+            tasksByStatusLabels = tasksByStatus
+                .Select(g =>
+                {
+                    // Převedeme stav na český název
+                    string statusName = g.Status switch
+                    {
+                        TaskItemStatus.New => "Nový",
+                        TaskItemStatus.InProgress => "Rozpracovaný",
+                        TaskItemStatus.Completed => "Dokončený",
+                        TaskItemStatus.Postponed => "Odložený",
+                        TaskItemStatus.Cancelled => "Zrušený",
+                        _ => g.Status.ToString()
+                    };
+
+                    double percentage = totalTasks > 0
+                        ? Math.Round(100.0 * g.Count / totalTasks)
+                        : 0;
+                    return $"{statusName} ({percentage}%)";
+                })
+                .ToArray();
+
+            // Zpracujeme úkoly podle priority
+            var allPriorities = Enum.GetValues(typeof(TaskPriority)).Cast<TaskPriority>();
+            var tasksByPriority = allPriorities.Select(p => new
+            {
+                Priority = p,
+                Count = tasks.Count(t => t.Priority == p)
+            }).ToList();
+
+            tasksByPriorityData = tasksByPriority.Select(g => (double)g.Count).ToArray();
+
+            // Připravíme popisky pro graf priorit včetně procent
+            var totalPriorityTasks = tasksByPriorityData.Sum();
+            tasksByPriorityLabels = tasksByPriority
+                .Select(g =>
+                {
+                    // Převedeme prioritu na český název
+                    string priorityName = g.Priority switch
+                    {
+                        TaskPriority.Low => "Nízká",
+                        TaskPriority.Medium => "Střední",
+                        TaskPriority.High => "Vysoká",
+                        TaskPriority.Critical => "Kritická",
+                        _ => g.Priority.ToString()
+                    };
+
+                    double percentage = totalPriorityTasks > 0
+                        ? Math.Round(100.0 * g.Count / totalPriorityTasks)
+                        : 0;
+                    return $"{priorityName} ({percentage}%)";
+                })
+                .ToArray();
+
+            // Zajistíme, že graf priorit bude mít alespoň nějaká data pro vykreslení
+            if (tasksByPriorityData.All(d => d == 0) && tasks.Any())
+            {
+                // Vytvoříme alespoň nějaké minimální hodnoty pro vykreslení grafu
+                tasksByPriorityData = new double[tasksByPriorityData.Length];
+
+                if (tasksByPriorityData.Length > 0) tasksByPriorityData[0] = 0.2;
+                if (tasksByPriorityData.Length > 1) tasksByPriorityData[1] = 0.1;
+
+                // Aktualizujeme popisky s procenty pro tyto minimální hodnoty
+                totalPriorityTasks = tasksByPriorityData.Sum();
+                for (int i = 0; i < tasksByPriorityLabels.Length; i++)
+                {
+                    string priorityName = allPriorities.ElementAt(i) switch
+                    {
+                        TaskPriority.Low => "Nízká",
+                        TaskPriority.Medium => "Střední",
+                        TaskPriority.High => "Vysoká",
+                        TaskPriority.Critical => "Kritická",
+                        _ => allPriorities.ElementAt(i).ToString()
+                    };
+
+                    double percentage = totalPriorityTasks > 0
+                        ? Math.Round(100.0 * tasksByPriorityData[i] / totalPriorityTasks)
+                        : 0;
+                    tasksByPriorityLabels[i] = $"{priorityName} ({percentage}%)";
+                }
+            }
+
+            // Zpracujeme top projekty podle počtu úkolů
+            var projectsWithTaskCounts = projects
+                .OrderByDescending(p => tasks.Count(t => t.ProjectId == p.Id))
+                .Take(5)
+                .ToList();
+
+            projectsTaskCountLabels = projectsWithTaskCounts.Select(p => p.Name).ToArray();
+
+            // Inicializujeme pole s celkovými počty úkolů v projektech
+            projectsTaskCountData = new double[projectsWithTaskCounts.Count];
+            for (int i = 0; i < projectsWithTaskCounts.Count; i++)
+            {
+                var projectId = projectsWithTaskCounts[i].Id;
+                projectsTaskCountData[i] = tasks.Count(t => t.ProjectId == projectId);
+            }
+
+            // Vytvoříme sérii pro každou prioritu v projektech
+            var priorities = Enum.GetValues(typeof(TaskPriority)).Cast<TaskPriority>().ToList();
+            projectsChartSeries = new List<ChartSeries>();
+
+            foreach (var priority in priorities)
+            {
+                // Převedeme prioritu na český název pro legendu
+                string priorityName = priority switch
+                {
+                    TaskPriority.Low => "Nízká",
+                    TaskPriority.Medium => "Střední",
+                    TaskPriority.High => "Vysoká",
+                    TaskPriority.Critical => "Kritická",
+                    _ => priority.ToString()
+                };
+
+                var series = new ChartSeries
+                    {
+                        Name = priorityName,
+                        Data = new double[projectsWithTaskCounts.Count]
+                    };
+
+                for (int i = 0; i < projectsWithTaskCounts.Count; i++)
+                {
+                    var projectId = projectsWithTaskCounts[i].Id;
+
+                    // Spočítáme úkoly dané priority v projektu
+                    series.Data[i] = tasks.Count(t => t.ProjectId == projectId && t.Priority == priority);
+                }
+
+                projectsChartSeries.Add(series);
+            }
+
+            // Pokud nejsou žádné projekty s úkoly, zajistíme prázdné pole
+            if (projectsTaskCountLabels.Length == 0)
+            {
+                projectsTaskCountData = Array.Empty<double>();
+                projectsChartSeries = new List<ChartSeries>();
+                projectsTaskCountLabels = Array.Empty<string>();
+            }
+        }
+        catch (Exception ex)
+        {
+            NotificationService.ShowToast($"Chyba při načítání dat: {ex.Message}", NotificationType.Error);
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    // UI AKCE
+    // Výběr projektu pro filtrování statistik
+    private void SelectProject(string projectName)
+    {
+        // Přepínáme výběr projektu - pokud je již vybrán, zrušíme výběr
+        selectedProjectName = (selectedProjectName == projectName) ? "" : projectName;
+        // Při změně projektu vždy zrušíme výběr priority
+        selectedPriorityName = "";
+        StateHasChanged();
+    }
+
+    // Výběr priority pro filtrování statistik
+    private void SelectPriority(string priorityName)
+    {
+        // Přepínáme výběr priority - pokud je již vybrána, zrušíme výběr
+        selectedPriorityName = (selectedPriorityName == priorityName) ? "" : priorityName;
+        StateHasChanged();
+    }
+
+    // POMOCNÉ METODY
+    // Získání počtu úkolů pro konkrétní index projektu
+    private int GetTaskCountForProjectIndex(int projectIndex)
+    {
+        if (projectIndex < 0 || projectIndex >= projectsTaskCountData.Length)
+            return 0;
+        return (int)projectsTaskCountData[projectIndex];
+    }
+
+    // Získání filtrovaného počtu úkolů podle výběru
+    private int GetFilteredTaskCount()
+    {
+        if (string.IsNullOrEmpty(selectedProjectName))
+            return GetTotalProjectTasks(); // Pro "všechny projekty"
+
+        int projectIndex = Array.IndexOf(projectsTaskCountLabels, selectedProjectName);
+        if (projectIndex < 0) return 0;
+
+        // Pokud je vybrána priorita, počítáme jen úkoly s touto prioritou
+        if (!string.IsNullOrEmpty(selectedPriorityName))
+        {
+            var prioritySeries = projectsChartSeries.FirstOrDefault(s => s.Name == selectedPriorityName);
+            return prioritySeries != null ? (int)prioritySeries.Data[projectIndex] : 0;
+        }
+
+        // Jinak počítáme všechny úkoly v projektu
+        return (int)projectsChartSeries.Sum(series => series.Data[projectIndex]);
+    }
+
+    // Získání celkového počtu úkolů ve všech projektech
+    private int GetTotalProjectTasks()
+    {
+        return (int)projectsTaskCountData.Sum();
+    }
+
+    // Získání ikony pro aktuálně vybraný filtr
+    private string GetDisplayIcon()
+    {
+        if (!string.IsNullOrEmpty(selectedPriorityName))
+        {
+            // Ikona podle vybrané priority
+            return selectedPriorityName switch
+            {
+                "Nízká" => Icons.Material.Filled.KeyboardArrowDown,
+                "Střední" => Icons.Material.Filled.Remove,
+                "Vysoká" => Icons.Material.Filled.KeyboardArrowUp,
+                "Kritická" => Icons.Material.Filled.PriorityHigh,
+                _ => Icons.Material.Filled.DataUsage
+            };
+        }
+
+        if (!string.IsNullOrEmpty(selectedProjectName))
+        {
+            return Icons.Material.Filled.Folder;
+        }
+        return Icons.Material.Filled.BarChart;
+    }
+
+    // Získání barvy pro aktuálně vybraný filtr
+    private string GetDisplayColor()
+    {
+        if (!string.IsNullOrEmpty(selectedPriorityName))
+        {
+            // Barva podle vybrané priority
+            return selectedPriorityName switch
+            {
+                "Nízká" => "var(--mud-palette-success)",
+                "Střední" => "var(--mud-palette-warning)",
+                "Vysoká" => "var(--mud-palette-error)",
+                "Kritická" => "var(--mud-palette-dark)",
+                _ => "#9E9E9E"
+            };
+        }
+
+        if (!string.IsNullOrEmpty(selectedProjectName))
+        {
+            return GetProjectColorByName(selectedProjectName);
+        }
+        return "#9E9E9E";
+    }
+
+    // Získání indexu zobrazení pro vybraný projekt
+    private int GetProjectDisplayIndex()
+    {
+        // Pokud nic není vybráno, vrátíme -1
+        if (string.IsNullOrEmpty(selectedProjectName) && string.IsNullOrEmpty(selectedPriorityName))
+            return -1;
+
+        // Jinak vrátíme 0 - pro signalizaci výběru
+        return 0;
+    }
+
+    // Získání barvy zobrazení pro vybraný projekt
+    private string GetProjectDisplayColor(int index)
+    {
+        // Tato funkce ignoruje index (používáme GetProjectDisplayIndex jen pro signalizaci výběru)
+        // a vrací přímo barvu z GetDisplayColor
+        return GetDisplayColor();
+    }
+
+    // Získání barvy projektu podle jeho názvu
+    private string GetProjectColorByName(string projectName)
+    {
+        // Pokud je jméno prázdné, vrátíme výchozí barvu
+        if (string.IsNullOrEmpty(projectName))
+            return "#9E9E9E";
+
+        // Najdeme index projektu podle jména
+        int index = Array.IndexOf(projectsTaskCountLabels, projectName);
+
+        // Použijeme stejné barvy jako v původní metodě
+        string[] colors = { "#8bc34a", "#5c6bc0", "#26a69a", "#ec407a", "#ab47bc" };
+        return index >= 0 && index < colors.Length ? colors[index] : "#9E9E9E";
+    }
+
+    // Získání stylu pro chip
+    private string GetChipStyle(bool isSelected, string color)
+    {
+        return $"background-color: {(isSelected ? color : "transparent")}; color: {(isSelected ? "white" : color)}; border-color: {color};";
+    }
+
+    // Získání barvy pro segment grafu
+    private string GetSegmentColor(int index, string[] palette)
+    {
+        return index >= 0 && index < palette.Length ? palette[index] : "#9E9E9E";
+    }
+
+    // Získání barvy pro segment stavu
+    private string GetStatusColor(int index) =>
+       GetSegmentColor(index, new string[] {
+        "var(--mud-palette-info)",
+        "var(--mud-palette-warning)",
+        "var(--mud-palette-success)",
+        "var(--mud-palette-secondary)",  
+        "var(--mud-palette-error)"
+    });
+
+    // Získání barvy pro segment priority
+    private string GetPriorityColor(int index) =>
+       GetSegmentColor(index, new string[] {
+        "var(--mud-palette-success)",
+        "var(--mud-palette-warning)",
+        "var(--mud-palette-error)",
+        "var(--mud-palette-dark)"
+    });
+
+    // Získání ikony pro segment stavu
+    private string GetStatusIcon(int index)
+    {
+        if (index < 0 || index >= tasksByStatusLabels.Length)
+            return Icons.Material.Filled.DataUsage;
+
+        var status = tasksByStatusLabels[index].Split('(')[0].Trim().ToLower();
+
+        if (status.Contains("nový")) return Icons.Material.Filled.FiberNew;
+        if (status.Contains("rozpracovaný")) return Icons.Material.Filled.PlayArrow;
+        if (status.Contains("dokončený")) return Icons.Material.Filled.CheckCircle;
+        if (status.Contains("odložený")) return Icons.Material.Filled.Schedule;
+        if (status.Contains("zrušený")) return Icons.Material.Filled.Cancel;
+
+        return Icons.Material.Filled.Circle;
+    }
+
+    // Získání ikony pro segment priority
+    private string GetPriorityIcon(int index)
+    {
+        if (index < 0 || index >= tasksByPriorityLabels.Length)
+            return Icons.Material.Filled.DataUsage;
+
+        var priority = tasksByPriorityLabels[index].Split('(')[0].Trim().ToLower();
+
+        if (priority.Contains("nízká")) return Icons.Material.Filled.KeyboardArrowDown;
+        if (priority.Contains("střední")) return Icons.Material.Filled.Remove;
+        if (priority.Contains("vysoká")) return Icons.Material.Filled.KeyboardArrowUp;
+        if (priority.Contains("kritická")) return Icons.Material.Filled.PriorityHigh;
+
+        return Icons.Material.Filled.DataUsage;
+    }
+
+    // Získání atributů pro chip
+    private Dictionary<string, object> GetChipAttributes(int index, Func<int, string> colorGetter)
+    {
+        // Responzivní styly, které aplikujeme v obou případech
+        string responsiveStyles = "white-space: nowrap; text-overflow: ellipsis; overflow: hidden; max-width: 100%;";
+
+        // Pokud není vybrán žádný segment, použijeme výchozí styl + responzivní vlastnosti
+        if (index < 0)
+            return new Dictionary<string, object> {
+                { "Color", Color.Default },
+                { "Style", responsiveStyles }
+            };
+
+        // Získáme barvu segmentu
+        string color = colorGetter(index);
+
+        // Pro šedý segment použijeme výchozí, pro ostatní vlastní barvu
+        if (color == "#9E9E9E")
+        {
+            return new Dictionary<string, object> {
+                { "Color", Color.Default },
+                { "Style", responsiveStyles }
+            };
+        }
+        else
+        {
+            return new Dictionary<string, object> {
+                { "Style", $"background-color:{color}; color: white; {responsiveStyles}" }
+            };
+        }
+    }
+
+    // Získání zkrácených názvů projektů pro graf
+    private string[] GetTruncatedProjectLabels()
+    {
+        return projectsTaskCountLabels.Select(label => GetTruncatedName(label, 15)).ToArray();
+    }
+
+    // Zkrácení dlouhého textu pro zobrazení v grafech
+    private string GetTruncatedName(string text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
+            return text;
+
+        return text.Substring(0, maxLength - 3) + "...";
+    }
+}
+
